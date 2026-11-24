@@ -1,0 +1,226 @@
+export interface StudyLesson {
+  definition: string
+  explanation: string
+  example: string
+  mistake: string
+  memory: string
+  pattern: string
+}
+
+type Examples = [string, string, string, string, string, string]
+
+const entries: Record<string, Examples> = {
+  'RHY-1-VALUES': [
+    'A note value is a fraction or multiple of a semibreve.',
+    '把 semibreve 定为一。minim、crotchet、quaver、semiquaver 依次把前一级的长度减半。速度会改变每个音所占的实际秒数，但音符之间的比例保持相同。',
+    '一个 minim 等于两个 crotchet，也等于四个 quaver。换算时，每往下一级就乘二。',
+    '把 crotchet 一律当作一拍。它的时值是全音符的四分之一，拍子的单位由拍号和节拍组织决定。',
+    '沿时值阶梯每下一格，数量翻倍。',
+    'Calculate how many of a shorter value equal one longer note.',
+  ],
+  'RHY-1-RESTS': [
+    'A rest indicates silence for a written duration.',
+    '许多休止符和音符拥有一一对应的时值。普通 semibreve rest 的符号悬挂在谱线上。这个符号用作 whole-bar rest 时，表示整个小节休止，要按拍号计算实际长度。',
+    '在三四拍中，一个整小节休止占三个 crotchet。一个单独的 minim rest 则占两个 crotchet。',
+    '看见悬挂的小方块，就固定按四拍算。先确定它是否表示整小节。',
+    '先辨别是否整小节，再按符号或拍号求长度。',
+    'Match a rest to the equal note value or calculate a whole bar of silence.',
+  ],
+  'RHY-1-TIE': [
+    'A tie adds the durations of adjacent notes of the same pitch.',
+    '延音线把相同音高的两个音符合成一次起音。时值相加，第二个音不重新弹。跨小节时，仍要分别计算每小节所写的部分。连奏线可以连不同的音，功能是改变演奏方式。',
+    'C 的 crotchet 与 C 的 quaver 相连，声音持续三个 quaver。',
+    '把两个被连起来的同音都重新弹，或把不同音高之间的曲线当成延音线。',
+    '同音加时值，只起音一次。',
+    'Find the duration of a tie or distinguish a tie from a slur.',
+  ],
+  'RHY-1-DOT': [
+    'One dot adds half of the written note value.',
+    '附点在符头右侧。它延长原音符的一半。算的时候先选能表示半个原音符的单位，再把原值和半值相加。',
+    '附点 crotchet 等于一个 crotchet 加一个 quaver，共三个 quaver。',
+    '给所有带点的音符加同一个固定时值，或把符头上方的断奏点当成附点。',
+    '点跟着原值走，永远取原值的一半。',
+    'Select the duration equivalent to a singly dotted note.',
+  ],
+  'MET-1-SIMPLE': [
+    'In simple metre, each beat divides into two equal subdivisions.',
+    '二四、三四、四四拍的分母都是四，说明拍子用 crotchet 来数。分子告诉你每小节有几拍，每拍还可分成两个 quaver。',
+    '三四拍有三个 crotchet 拍，每小节可以写六个 quaver，按两两分组。',
+    '看到六个 quaver，就直接断定是六八拍。比较每拍含几个 quaver 和重拍的位置。',
+    '分母看单位，分子数拍数。',
+    'Select the number of crotchet beats or the number of quavers in a simple bar.',
+  ],
+  'MET-1-BAR': [
+    'A barline divides the music into bars of the specified duration.',
+    '从一小节起点开始累计音符和休止，达到拍号要求的时值就到小节边界。用同一单位相加可以避免把符头数误当作拍数。',
+    '二四拍里，minim 自己占满一小节，crotchet 加两个 quaver 也正好占满一小节。',
+    '每两个音符画一道小节线。不同音符的时值可以相差一倍或更多。',
+    '达到小节容量才划线。',
+    'Choose the point at which the first complete bar ends.',
+  ],
+  'MET-1-GROUP': [
+    'Beaming in simple metre makes the main beats easy to see.',
+    '在基本练习里，每两个 quaver 合成一个 crotchet 拍。先按拍定位，再把同拍内的短音符用符杠组合。实际谱例可能在规则允许时跨拍连杠。',
+    '三四拍里，六个均匀的 quaver 可以按两个、两个、两个分成三拍。',
+    '把每组三个 quaver 当成三四拍的一拍。这会让读者听出不同的重拍位置。',
+    '先标拍点，再连符杠。',
+    'Choose a grouping that shows the boundaries of individual beats.',
+  ],
+  'MET-2-SIMPLE': [
+    'Simple metre can use minim or quaver beats as well as crotchet beats.',
+    '二二、三二、四二拍的拍子单位是 minim。三八拍是单三拍，每拍一个 quaver。分子相同只表示拍数相同，分母区分每拍所用的书写单位。',
+    '三二拍有三个 minim，也就是六个 crotchet。三八拍有三个 quaver。',
+    '看到分母八就判断为复拍子。三八拍和六八拍的拍内划分不同。',
+    '分母二读 minim，分母八读 quaver，再判断拍子类型。',
+    'Find the principal beat value for 2/2, 3/2, 4/2 or 3/8.',
+  ],
+  'MET-2-GROUP': [
+    'Group notes and rests to show the beat boundaries of the given simple metre.',
+    '休止符也占拍。先定位空白从第几拍开始，然后选休止符清楚地显示跨度。一个休止区域如果只在拍内延续，可以使用恰好填满该拍的休止符。',
+    '二二拍里，第一拍是 minim 音符，第二拍全休止，因此可以写一个 minim rest。',
+    '把同样长度的休止符随意放在任何位置。读谱时，休止分组会影响拍点是否清楚。',
+    '给无声的部分也画拍格。',
+    'Select a rest that fills a specified complete beat.',
+  ],
+  'RHY-2-DOT': [
+    'A dot extends a note by one half of its base value.',
+    '从附点 semibreve 到附点 quaver，单附点的比例都是三比二。先把原值换成下一层时值的两个单位，然后加一个。',
+    '附点 semibreve 占三个 minim。附点 crotchet rest 占三个 quaver。',
+    '附点 quaver 写成两个 semiquaver 加一个 quaver。这样多加了一倍的附点时值。',
+    '附点音符等于下一层的三个单位。',
+    'Convert a dotted value to a specified shorter note value.',
+  ],
+  'RHY-2-TRIPLET': [
+    'A triplet fits three written subdivisions into the time of two ordinary ones.',
+    '三连音数字三表示三等分。若括号跨三个 quaver，就把两个普通 quaver 的长度平均分给三个成员。用一个休止符替代其中一项，整组所占时间保持不变。',
+    '三个 triplet quaver 一起占一个 crotchet。一个 triplet quaver 占该 crotchet 的三分之一。',
+    '把三个连音成员按原本时值逐个相加，然后忽略三连音符号。',
+    '三分两，整组还是两个普通单位。',
+    'Compare the complete triplet with an ordinary duration, including rests.',
+  ],
+  'MET-3-COMPOUND': [
+    'Compound metre divides each main beat into three equal parts.',
+    '六八、九八和十二八拍每个主要拍都由三个 quaver 组成，因此拍单位是 dotted crotchet。将分子除以三，就得到主要拍数。',
+    '九八拍一小节有三个 dotted crotchet 拍，也是九个 quaver。',
+    '把九八拍听成九个主要拍。钢琴上可以轻点九下，但要让第一个、第四个和第七个 quaver 承担拍点。',
+    '复拍子以三为一组。',
+    'Classify 6/8, 9/8 and 12/8 by their principal beat counts.',
+  ],
+  'MET-3-COMPOUND-GROUP': [
+    'Group compound subdivisions in threes within each main beat.',
+    '复拍子先定位主要拍，再处理每拍的三个部分。即使一部分写成休止，仍然要保留这个位置。常见练习要求分组直接显示 dotted beat 边界。',
+    '六八拍重心通常在第一个和第四个 quaver，六个连续 quaver 可按三加三连杠。',
+    '因为六等于三乘二，就选择两加两加两。这个分法更像三四拍。',
+    '数一二三、二二三，听见两个主拍。',
+    'Choose beaming that displays each main compound beat.',
+  ],
+  'MET-3-UPBEAT': [
+    'An upbeat is an incomplete opening bar before the first full bar.',
+    '弱起中的音符位于第一完整小节的重拍之前。先按拍号计算一小节的容量，再看开头是否不足。若缺的拍在结尾补足，首尾两个不完整小节合成一整小节。',
+    '四四拍开头只有一个 crotchet，且末尾补齐弱起，那么最后一小节有三个 crotchet 的时值。',
+    '给开头所有短句都贴上 upbeat 的标签。检查从曲首到第一条小节线的总时值。',
+    '先找第一个完整小节的第一拍。',
+    'Calculate the complement of an upbeat when the final bar balances it.',
+  ],
+  'RHY-3-SHORT': [
+    'A demisemiquaver lasts one thirty-second of a semibreve.',
+    'demisemiquaver 比 semiquaver 短一半，有三面符尾或三道符杠。相同时值的休止符也有三个钩。数拍时，可以先把上层单位换成分母为三十二的份数。',
+    '一个 quaver 等于两个 semiquaver，也等于四个 demisemiquaver。',
+    '把三道符杠与三连音数字三混为一谈。符杠决定基本时值，数字才表示不规则分组。',
+    'quaver 一尾，semiquaver 两尾，demisemiquaver 三尾。',
+    'Convert a longer value to demisemiquavers or compare rests and notes.',
+  ],
+  'RHY-3-TRIPLET': [
+    'Three triplet demisemiquavers occupy two ordinary demisemiquaver values.',
+    '把三连音比率应用到更短的音符时，原理不变。先求整组时值，再按三个成员平均分配。若一个成员休止，它仍占三分之一。',
+    '两个普通 demisemiquaver 等于一个 semiquaver，因此三个三连音 demisemiquaver 才占一个 semiquaver。',
+    '把七个普通 demisemiquaver 和一个三连音组的数量直接相加。先求每组的实际时值。',
+    '先看总量，再看分法。',
+    'Find the ordinary note value equal to a full triplet group.',
+  ],
+  'RHY-3-DOT': [
+    'A dotted semiquaver equals three demisemiquavers.',
+    '附点增加半个原时值。semiquaver 的一半是 demisemiquaver，所以附点 semiquaver 包含两个原单位再加一个。',
+    '附点 semiquaver 后面加一个 demisemiquaver，两者共占一个 quaver。',
+    '记住附点 quaver 的答案后直接套用。必须换成题目指定的计量单位。',
+    '十六分音符占两个三十二分单位，附点再加一个。',
+    'Find a dotted semiquaver equivalent or its complement to a quaver.',
+  ],
+  'MET-4-METRE': [
+    'Duple, triple and quadruple name beat counts. Simple and compound name subdivisions.',
+    '每小节有两、三、四个主要拍时，分别称为 duple、triple、quadruple。主要拍平分为两份是 simple，平分为三份是 compound。拍号的分母可以变化，先找主要拍，再判断类型。',
+    '九四拍的主要拍是三个 dotted minim，因此是 compound triple。三二拍是 simple triple。',
+    '把 9/4 当作九个主要拍。四分音符是这里的分组单位，三个一起构成一拍。',
+    '用两个问题检查：有几拍，每拍分几份？',
+    'Classify a simple or compound signature or identify its beat unit.',
+  ],
+  'MET-4-GROUP': [
+    'Grouping should reveal the main beats or permitted larger divisions of a bar.',
+    '先从拍号确定各主拍长度，再检查音符和休止是否显示这些界线。短音符可以用符杠表现拍内关系。跨主要拍的长音在有歧义时，可以用延音线把界线显出来。',
+    '在六十六拍中，每个主要拍由三个 semiquaver 组成。六个等长音符按三加三分组可显示两个主要拍。',
+    '遇到新分母就沿用 quaver 分组，不换算每个小单位的时值。',
+    '拍号一变，先重算每拍容量。',
+    'Select grouping or a rest that clearly indicates a main beat in the given metre.',
+  ],
+  'RHY-4-BREVE': [
+    'A breve lasts two semibreves.',
+    'breve 可以用长圆符头和两侧短竖线表示，时值为两个 semibreve。在常见练习中，从全音符向更短的单位逐级换算，休止符也遵循同一时值。',
+    '一个 breve 等于两全音符、四个 minim 或八个 crotchet。',
+    '因为单词听起来短，就把 breve 与 quaver 搞混。breve 的写法和时值都明显不同。',
+    'breve 先换两个 semibreve，再往下分。',
+    'Calculate the number of ordinary notes or rests equivalent to a breve.',
+  ],
+  'RHY-4-DOUBLE-DOT': [
+    'Two dots add one half and one quarter of the original duration.',
+    '第二个点贡献第一个点的一半。以原始时值为一，总长是七个四分之一。这个比例同样适用于带双附点的休止符。',
+    '双附点 crotchet 加上 quaver 和 semiquaver 的时值，共七个 semiquaver。',
+    '两个点都加原值的一半。第二点只能加原值的四分之一。',
+    '一、二分之一、四分之一，合起来是七个四分之一。',
+    'Convert a double dotted note or rest to a smaller value.',
+  ],
+  'RHY-4-DUPLET': [
+    'A duplet divides a compound beat into two equal parts.',
+    '在复拍子通常三等分的拍内，用标着二的 duplet 表示改用两个相等的成员。两个 duplet quaver 合在一起占三个普通 quaver 的时间。',
+    '六八拍里，两个 duplet quaver 等于一个 dotted crotchet。',
+    '把 duplet 的两个成员按两个普通 quaver 相加。括号二已经改变了实际时值。',
+    '两分三，先找原来那一整拍。',
+    'Find the equivalent ordinary value of a complete duplet.',
+  ],
+  'RHY-4-REST-GROUP': [
+    'A dotted minim rest can span the specified compound grouping where it preserves the metre.',
+    '附点 minim rest 等于三个 crotchet，也就是六个 quaver。先确定这段较长的休止在复拍子里跨几个主拍，再检查它能否按题目的拍号和位置这样书写。',
+    '六四拍中，一个主要拍等于一个 dotted minim，合三个 crotchet。这个主拍全休止时，附点 minim rest 正好填满。',
+    '在任何拍号中都把同等长的休止合成一个附点休止符。要保留主要拍线索。',
+    '先画出主拍边界，再决定休止符的写法。',
+    'Recognise the duration and role of a dotted minim rest in compound metre.',
+  ],
+  'MET-5-IRREGULAR': [
+    'Irregular time signatures such as 5/8 and 7/4 combine unequal beat groupings.',
+    '五拍或七拍的总单位通常按二和三组成。先看分母，分辨写的是八分还是四分单位，再按乐谱提示找各组的起点。同一个拍号可以有不同的组合顺序。',
+    '五八拍可写成二加三或三加二。七四拍可用二加二加三表示。',
+    '看到七就默认唯一一种分组。分组顺序取决于标记、符杠和音乐重音。',
+    '先辨单位，再找二与三的组合。',
+    'Distinguish irregular signatures and calculate the length of a complete bar.',
+  ],
+  'MET-5-GROUP': [
+    'Grouping in irregular metre follows the indicated sequence of two and three units.',
+    '先把拍号按音乐重心拆开，再对每一组内的短音符连符杠。休止符占用同样的时间。两种分组即使总时值完全一样，主拍出现的位置也可能不同。',
+    '七八拍按二加三加二时，主拍落在第一个、第三个和第六个 quaver。',
+    '只算七个八分音符就选答案。要确认每组的开始和长度。',
+    '照着给定顺序敲重音，比只看总数更清楚。',
+    'Choose the grouping or accent positions for a specified irregular bar.',
+  ],
+  'RHY-5-TUPLET': [
+    'A tuplet fits a specified number of equal parts into a stated ordinary duration.',
+    '五连音、六连音和其他不规则分割通常在题目中注明替代多少普通单位。整组时值由被替代的普通单位数决定，而每个成员是整组的等分。计算时先做分数，再按题目要求换单位。',
+    '五个 semiquaver 在四个普通 semiquaver 的时间里奏完。整组是一个 crotchet，每个成员是五分之一个 crotchet。',
+    '把连音数字直接当成时值乘数。数字说明如何分组，并没有把段落拉长为五个普通单位。',
+    '先定替代的总长，再除以连音个数。',
+    'Find the complete tuplet duration or the fraction occupied by one member.',
+  ],
+}
+
+export const rhythmLessons = Object.fromEntries(Object.entries(entries).map(([id, fields]) => {
+  const [definition, explanation, example, mistake, memory, pattern] = fields
+  return [id, { definition, explanation, example, mistake, memory, pattern }]
+})) as Record<string, StudyLesson>
