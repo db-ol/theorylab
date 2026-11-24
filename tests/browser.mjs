@@ -55,7 +55,7 @@ async function intervalPractice(page) {
   await go(page, '#/lesson/INT-1-TONE')
   await page.getByRole('heading', { name: 'Interval explorer' }).waitFor()
   assert.ok(await page.locator('main [lang="zh-Hans"]').count() > 0)
-  await page.getByLabel('Clef', { exact: true }).selectOption('alto')
+  await page.getByRole('combobox', { name: 'Clef', exact: true }).selectOption('alto')
   await page.getByText('Alto clef', { exact: true }).waitFor()
   await page.getByRole('group', { name: 'Second note' }).getByLabel('Letter').selectOption('G')
   await page.getByText('3 semitones', { exact: true }).waitFor()
@@ -122,7 +122,7 @@ async function grade5Entry(page) {
 async function referenceVisuals(page) {
   await go(page, '#/lesson/ORN-4-SYMBOLS')
   await page.getByRole('heading', { name: 'Ornament examples' }).waitFor()
-  await page.getByLabel('Ornament', { exact: true }).selectOption({ label: 'lower mordent' })
+  await page.getByRole('combobox', { name: 'Ornament', exact: true }).selectOption({ label: 'lower mordent' })
   await page.getByRole('img', { name: 'Zigzag with vertical stroke' }).waitFor()
   await page.getByRole('img', { name: /treble clef staff, [A-G]\d, [A-G]\d, [A-G]\d/i }).waitFor()
 
