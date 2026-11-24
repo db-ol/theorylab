@@ -165,8 +165,33 @@ async function fullMock(page) {
   await page.getByRole('heading', { name: 'Exam history' }).waitFor()
 }
 
+async function metreAndProgress(page) {
+  await go(page, '#/lesson/MET-5-IRREGULAR')
+  const signature = page.getByRole('group', { name: 'Time signature', exact: true })
+  const family = page.getByRole('group', { name: 'Metre', exact: true })
+  assert.equal(await signature.getByRole('radio', { name: '5/8', exact: true }).isChecked(), true)
+  await signature.getByRole('radio', { name: '7/8', exact: true }).check()
+  await page.getByRole('group', { name: 'Beat grouping' }).getByRole('radio', { name: '2 + 3 + 2', exact: true }).check()
+  await page.getByRole('status').filter({ hasText: '2 + 3 + 2' }).waitFor()
+  await family.getByRole('radio', { name: 'Compound', exact: true }).check()
+  await signature.getByRole('radio', { name: '9/4', exact: true }).check()
+  await page.getByRole('status').filter({ hasText: '9 crotchets in the bar' }).waitFor()
+
+  await page.getByRole('button', { name: 'Mark lesson visited' }).click()
+  for (const route of ['#/', '#/curriculum']) {
+    await go(page, route)
+    const studied = page.getByRole('progressbar', { name: 'Grade 5 lessons studied', exact: true })
+    await page.locator('progress[aria-label="Grade 5 lessons studied"][value="1"]').waitFor()
+    const total = Number(await studied.getAttribute('max'))
+    assert.ok(total > 1)
+    await page.locator('.progress-stat').filter({ has: studied }).getByText(`${Math.round(100 / total)}%`, { exact: true }).waitFor()
+    assert.equal(await page.getByRole('progressbar', { name: 'Grade 5 objectives mastered', exact: true }).getAttribute('value'), '0')
+  }
+}
+
 async function mobileAndTimer() {
   const page = await openPage({ width: 390, height: 840 })
+  await metreAndProgress(page)
   await page.clock.install()
   await go(page, '#/lesson/INT-5-COMPOUND')
   const dimensions = await page.evaluate(() => ({

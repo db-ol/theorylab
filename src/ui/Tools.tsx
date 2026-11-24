@@ -82,13 +82,37 @@ function VocabularyDrill({ progress }: { progress: Progress }) {
 export function Settings({ progress }: { progress: Progress }) {
   const settings = progress.data.settings[0]?.value ?? defaultSettings
   const [message, setMessage] = useState('')
-  const setup = (event: FormEvent<HTMLFormElement>) => {
+  const [transfer, setTransfer] = useState<'export' | 'import' | null>(null)
+  const setup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    void progress.save('settings', { id: 'mastery', value: {
+    const saved = await progress.save('settings', { id: 'mastery', value: {
       minDistinct: Number(form.get('distinct')), minAccuracy: Number(form.get('accuracy')) / 100, minVariants: Number(form.get('variants')),
     } })
-    setMessage('Mastery settings saved.')
+    setMessage(saved ? 'Mastery settings saved.' : '')
+  }
+  const download = async () => {
+    setTransfer('export')
+    setMessage('')
+    try {
+      if (await progress.download()) setMessage('Backup download started.')
+    } finally {
+      setTransfer(null)
+    }
+  }
+  const importBackup = async (file: File) => {
+    setTransfer('import')
+    setMessage('')
+    try {
+      const summary = await progress.restore(await file.text())
+      if (summary) {
+        setMessage(`Import complete. Added ${summary.added}, updated ${summary.updated}, skipped ${summary.unchanged} matching records and kept ${summary.keptLocal} local records.`)
+      }
+    } catch {
+      setMessage('This file could not be read. Choose a TheoryLab JSON backup in Files or Downloads.')
+    } finally {
+      setTransfer(null)
+    }
   }
   return <>
     <div className="page-heading"><p className="eyebrow">This device</p><h1>Settings</h1><p>Your learning records are stored in this browser.</p></div>
@@ -97,14 +121,20 @@ export function Settings({ progress }: { progress: Progress }) {
         <label>Distinct independent questions<input type="number" name="distinct" min="1" max="1000" defaultValue={settings.minDistinct} required/></label>
         <label>Minimum accuracy (%)<input type="number" name="accuracy" min="1" max="100" defaultValue={settings.minAccuracy * 100} required/></label>
         <label>Successful variants<input type="number" name="variants" min="1" max="5" defaultValue={settings.minVariants} required/></label>
-        <button className="button primary">Save criteria</button>
+        <button className="button primary" disabled={!progress.ready}>Save criteria</button>
       </form><p>Delayed review remains part of mastery.</p></section>
-      <section className="panel"><h2>Progress backup</h2><p>Export your records as JSON or merge a backup from another browser.</p>
-        <button className="button secondary" disabled={!progress.ready} onClick={progress.download}>Export progress</button>
-        <label className="import-label">Import progress<input type="file" accept=".json,application/json" onChange={async (event) => {
+      <section className="panel" aria-busy={transfer !== null}><h2>Progress backup</h2><p>Use a JSON backup to move lessons, practice history and exam results between browsers.</p>
+        <ol>
+          <li>On the first device, download a dated backup. On iPhone or iPad, find the download in Files and move it to iCloud Drive or another folder both devices can access.</li>
+          <li>On the second device, download a backup of its own progress. Then choose Import progress and select the first device’s file.</li>
+          <li>To move the combined history back to the first device, export a new backup from the second device and import it on the first.</li>
+        </ol>
+        <p>Imports merge learning records and keep this device’s saved mastery settings. Use one device at a time for a timed exam. Its original countdown continues during transfer.</p>
+        <button className="button secondary" disabled={!progress.ready || transfer !== null} onClick={() => { void download() }}>{transfer === 'export' ? 'Preparing backup' : 'Export progress'}</button>
+        <label className="import-label">{transfer === 'import' ? 'Importing progress' : 'Import progress'}<input type="file" accept=".json,application/json" disabled={!progress.ready || transfer !== null} onChange={(event) => {
           const file = event.currentTarget.files?.[0]
           event.currentTarget.value = ''
-          if (file) setMessage(await progress.restore(await file.text()) ? 'Progress imported.' : '')
+          if (file) void importBackup(file)
         }}/></label></section>
     </div>
     {message && <p role="status">{message}</p>}

@@ -26,11 +26,13 @@ The build goes into `dist`. For GitHub Pages, select **GitHub Actions** as the P
 
 ## Study workflow
 
-- **Learn** with written explanations, worked examples, terminology, and interactive notation. The note, interval and chord explorers can play synthesized examples.
+- **Learn** with written explanations and interactive notation. In metre lessons, choose a metre family, a time signature and, where applicable, a beat grouping. End each lesson with three original English questions and review the Chinese feedback.
 - **Practise** in English and review Chinese reasoning after submitting. Optional vocabulary help is recorded separately.
 - **Review** errors with fresh questions on the same objective. Mastery requires varied independent answers and a later successful review.
 - **Take a diagnostic** across all domains or sample all 105 objectives. The results link to relevant objectives and prerequisites.
 - **Sit a mock** with 75 marks across seven sections, a 120 minute countdown, question flags, browser saving, and result explanations after submission.
+
+The dashboard shows the percentage of Grade 5 lessons studied and the percentage of objectives mastered. Mark a lesson visited or finish its knowledge check to count it as studied. To move progress between devices, export a dated backup from **Settings**, save it to a shared folder such as iCloud Drive and import it on the other device. Export the merged backup to bring the first device up to date.
 
 ## Curriculum and sources
 
@@ -43,7 +45,7 @@ The [product requirements](PRD.md), [architecture](ARCHITECTURE.md), [curriculum
 - Every mapped objective has an implemented lesson and practice, with automated checks for question diversity and scoring. A separate music theory educator and native Chinese editorial review are still pending.
 - The mock presents each marked part as a separate interaction. It uses sliders and selectors for keyboard friendly notation entry. Some grouping and notation choices use English descriptions. Shared excerpts are generated from a limited set of score shapes. Multirow matching and broader visual notation coverage remain open.
 - The project uses a small SVG renderer, Web Audio, CSS, and native IndexedDB. The renderer supports the notation used by the app. Engraving details and layout still need a visual review across browsers.
-- The production build, automated unit checks, and a built app smoke check in a simulated DOM passed locally. Real browser tests are configured in CI. The local environment blocked a live preview and browser execution. A clean online dependency installation and a hosted Pages deployment remain unverified.
+- GitHub Actions installs dependencies, runs the unit tests, builds the site and checks it in Chromium before deploying to GitHub Pages. [View deployment runs](https://github.com/db-ol/theorylab/actions/workflows/site.yml)
 - TheoryLab is an unofficial study resource. The official ABRSM practice page links to its own examination experience.
 
 Released under the [MIT licence](LICENSE).

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { isAvailable, lessons } from '../curriculum/learningContent'
 import { objectives, type Objective } from '../curriculum/objectives'
 import { accuracy, defaultSettings, localStreak, mistakeCauses, summarizeObjective, type Attempt } from '../learning/progress'
@@ -8,7 +8,7 @@ import { HarmonyExplorer, PitchExplorer, RhythmExplorer, ScaleExplorer } from '.
 import { ExamStimulus } from './ExamStimulus'
 import { ReferenceVisual } from './ReferenceVisual'
 import { referenceIds } from '../curriculum/referenceLessons'
-import { Quiz } from './Practice'
+import { LessonCheck, Quiz } from './Practice'
 import type { Grade5Question } from '../exam/grade5'
 import { Staff } from './Notation'
 import { parsePitch } from '../theory'
@@ -45,6 +45,15 @@ function objectiveState(id: string, progress: Progress) {
 
 export const percent = (value: number | null) => value === null ? 'No data' : `${Math.round(value * 100)}%`
 
+function ProgressStat({ label, count, total, icon }: { label: string; count: number; total: number; icon: 'book' | 'target' }) {
+  return <div className="stat progress-stat">
+    <Icon name={icon}/><span>{label}</span>
+    <strong>{percent(count / total)}</strong>
+    <small>{count} of {total}</small>
+    <progress value={count} max={total} aria-label={label} aria-valuetext={`${count} of ${total}`}/>
+  </div>
+}
+
 export function Dashboard({ progress }: { progress: Progress }) {
   const domainAttempts = progress.data.attempts.filter((attempt) => attempt.mode !== 'vocabulary')
   const grade5Attempts = domainAttempts.filter((attempt) => objectiveById.get(attempt.objectiveId)?.grade === 5)
@@ -77,8 +86,8 @@ export function Dashboard({ progress }: { progress: Progress }) {
       <div className="hero-art" aria-hidden="true"><Staff pitches={intervalDemo} showClefName={false} /><div className="hero-art-notes"><span>C</span><span>E</span><span>G</span></div></div>
     </section>
     <div className="stats-grid">
-      <div className="stat"><Icon name="book"/><span>Grade 5 lessons visited</span><strong>{visited}<small> / {grade5.length}</small></strong></div>
-      <div className="stat"><Icon name="target"/><span>Grade 5 objectives mastered</span><strong>{mastered}<small> / {grade5.length}</small></strong></div>
+      <ProgressStat label="Grade 5 lessons studied" icon="book" count={visited} total={grade5.length} />
+      <ProgressStat label="Grade 5 objectives mastered" icon="target" count={mastered} total={grade5.length} />
       <div className="stat"><Icon name="pulse"/><span>Grade 5 independent accuracy</span><strong>{percent(accuracy(grade5Attempts.filter((item) => !item.assisted)))}</strong></div>
       <div className="stat"><Icon name="review"/><span>Reviews due</span><strong>{due.length}</strong></div>
     </div>
@@ -91,16 +100,17 @@ export function Dashboard({ progress }: { progress: Progress }) {
         <a className="plan-row" href="#/vocabulary"><Icon name="glossary"/><span><strong>Exam vocabulary</strong><small>Recall and recognition</small></span></a>
       </section>
       <section className="panel">
-        <h2>Curriculum coverage</h2>
-        <p>{available.length} of {objectives.length} mapped objectives have an interactive lesson and practice.</p>
-        <progress value={available.length} max={objectives.length} aria-label="Syllabus implementation coverage"/>
+        <h2>Grade 5 mastery by topic</h2>
+        <p>Mastery requires independent practice and a successful delayed review.</p>
         <dl className="overview-list">
           {domains.map((domain) => {
-            const items = objectives.filter((objective) => objective.domain === domain)
+            const items = grade5.filter((objective) => objective.domain === domain)
+            if (!items.length) return null
             const count = items.filter((item) => states.get(item.id)?.stage === 'Mastered').length
             return <div key={domain}><dt>{domain}</dt><dd>{Math.round(count * 100 / items.length)}% mastered</dd></div>
           })}
         </dl>
+        <p>Syllabus coverage across all grades · {available.length} of {objectives.length} objectives available.</p>
       </section>
     </div>
     <div className="content-grid">
@@ -121,8 +131,10 @@ export function Dashboard({ progress }: { progress: Progress }) {
 export function Curriculum({ progress, chinese, scope = 'grade5' }: { progress: Progress; chinese: boolean; scope?: StudyScope }) {
   const [byGrade, setByGrade] = useState(false)
   const [query, setQuery] = useState('')
-  const matches = objectives.filter((item) => inScope(item, scope)
-    && [item.title, item.chineseTitle, item.id, ...item.terms].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
+  const scoped = objectives.filter((item) => inScope(item, scope))
+  const matches = scoped.filter((item) => [item.title, item.chineseTitle, item.id, ...item.terms].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
+  const states = new Map(scoped.map((item) => [item.id, objectiveState(item.id, progress)]))
+  const studied = new Set(progress.data.visits.map((visit) => visit.id))
   const label = studyScopes.find(({ id }) => id === scope)?.label
   const groups: [string, Objective[]][] = scope !== 'grade5' && byGrade
     ? ([1, 2, 3, 4, 5] as const).map((grade) => [`Grade ${grade}`, matches.filter((item) => item.grade === grade)])
@@ -135,12 +147,16 @@ export function Curriculum({ progress, chinese, scope = 'grade5' }: { progress: 
     <div className="filter-row"><StudyScopeNav scope={scope} page="curriculum" />
       {scope !== 'grade5' && <div className="segmented" role="group" aria-label="Group objectives"><button aria-pressed={!byGrade} onClick={() => setByGrade(false)}>By domain</button><button aria-pressed={byGrade} onClick={() => setByGrade(true)}>By grade</button></div>}
       <label className="search-label"><span className="sr-only">Search objectives</span><input type="search" placeholder="Search objectives" value={query} onChange={(e) => setQuery(e.target.value)} /></label></div>
+    <div className="curriculum-progress">
+      <ProgressStat label={`${label} lessons studied`} icon="book" count={scoped.filter((item) => studied.has(item.id)).length} total={scoped.length} />
+      <ProgressStat label={`${label} objectives mastered`} icon="target" count={scoped.filter((item) => states.get(item.id)?.stage === 'Mastered').length} total={scoped.length} />
+    </div>
     {groups.map(([name, items]) => {
       if (!items.length) return null
       return <section key={name} className="panel curriculum-group">
         <div className="between"><h2>{name}</h2><span className="muted">{items.length} objectives</span></div>
         <ul>{items.map((item) => {
-          const state = objectiveState(item.id, progress)
+          const state = states.get(item.id)!
           return <li key={item.id} className="objective-row">
             <div><a href={`#/lesson/${item.id}`}>{item.title}</a>{chinese && <span lang="zh-Hans">{item.chineseTitle}</span>}</div>
             <small>Grade {item.grade} · {isAvailable(item.id) ? state.stage : 'Syllabus preview'}</small>
@@ -154,15 +170,25 @@ export function Curriculum({ progress, chinese, scope = 'grade5' }: { progress: 
 
 export function Lesson({ objective, progress, chinese }: { objective: Objective; progress: Progress; chinese: boolean }) {
   const lesson = lessons[objective.id]
-  const [confirmed, setConfirmed] = useState(false)
+  const [marking, setMarking] = useState(false)
+  const visitPending = useRef(false)
   const visited = progress.data.visits.some((visit) => visit.id === objective.id)
+  const markVisited = () => {
+    if (visited || visitPending.current) return
+    visitPending.current = true
+    setMarking(true)
+    void progress.save('visits', { id: objective.id, at: Date.now() }).finally(() => {
+      visitPending.current = false
+      setMarking(false)
+    })
+  }
   const peers = available.filter((item) => item.domain === objective.domain)
   const next = peers[peers.findIndex((item) => item.id === objective.id) + 1]
   let visual
   if (lesson?.pitches) visual = <IntervalExplorer initial={lesson.pitches} />
   else if (objective.domain === 'Keys and scales') visual = <ScaleExplorer demo={lesson?.demo} />
   else if (objective.domain === 'Pitch and clefs' || objective.domain === 'Transposition') visual = <PitchExplorer demo={lesson?.demo} transposeMode={objective.domain === 'Transposition'} instrumentMode={objective.id === 'TRN-5-CONCERT'} />
-  else if (objective.domain === 'Rhythm' || objective.domain === 'Metre and grouping') visual = <RhythmExplorer metre={objective.domain === 'Metre and grouping'} />
+  else if (objective.domain === 'Rhythm' || objective.domain === 'Metre and grouping') visual = <RhythmExplorer metre={objective.domain === 'Metre and grouping'} {...lesson?.metreExample} />
   else if (objective.domain === 'Triads and chords') visual = <HarmonyExplorer cadence={['HAR-5-PERFECT', 'HAR-5-PLAGAL', 'HAR-5-IMPERFECT', 'HAR-5-CHOICE'].includes(objective.id)} />
   else if (referenceIds.includes(objective.id)) visual = <ReferenceVisual objectiveId={objective.id} chinese={chinese} />
   else if (lesson?.stimulus || lesson?.demo) visual = <section className="panel"><h2>Score example</h2>{lesson.stimulus
@@ -188,13 +214,13 @@ export function Lesson({ objective, progress, chinese }: { objective: Objective;
           {objective.prerequisites.length ? <ul>{objective.prerequisites.map((id) =>
             <li key={id}><a href={`#/lesson/${id}`}>{objectiveById.get(id)?.title ?? id}</a></li>)}</ul> : <p>Start here. No prior theory objective is required.</p>}
           <p className="source"><a href={`${objective.source.url}#page=${objective.source.pages[0]}`} target="_blank" rel="noreferrer">ABRSM specification, pp. {objective.source.pages.join(', ')}</a></p>
-          {lesson && <div className="button-row"><button className="button secondary" disabled={visited || confirmed} onClick={() => { setConfirmed(true); void progress.save('visits', { id: objective.id, at: Date.now() }) }}><Icon name="check" size={17} />{visited || confirmed ? 'Lesson visited' : 'Mark lesson visited'}</button>
+          {lesson && <div className="button-row"><button className="button secondary" disabled={visited || marking} onClick={markVisited}><Icon name="check" size={17} />{visited ? 'Lesson visited' : marking ? 'Saving visit' : 'Mark lesson visited'}</button>
             {next && <a className="button secondary" href={`#/lesson/${next.id}`}>Next lesson</a>}</div>}
         </section>
       </div>
       {lesson && visual}
     </div>
-    {lesson && <Quiz key={objective.id} progress={progress} objectiveId={objective.id} mode="lesson" />}
+    {lesson && <LessonCheck key={objective.id} progress={progress} objectiveId={objective.id} onComplete={markVisited} />}
   </>
 }
 

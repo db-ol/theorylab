@@ -6,6 +6,7 @@ import {
   type Clef, type Inversion, type Pitch, type ScaleForm, type TransposingInstrument,
 } from '../theory'
 import { Icon } from './Icon'
+import { MetreExplorer, type InitialMetre } from './MetreExplorer'
 import { Keyboard, Staff, playPitches, type StaffPulse } from './Notation'
 
 const signatures = [0, 1, 2, 3, 4, 5, 6, -6, -5, -4, -3, -2, -1].map(getKeySignature)
@@ -105,49 +106,18 @@ export function PitchExplorer({ demo, instrumentMode, transposeMode }: {
   </section>
 }
 
-const metrePatterns: Record<string, number[]> = {
-  '2/2': [2, 2], '3/2': [2, 2, 2], '4/2': [2, 2, 2, 2],
-  '2/4': [2, 2], '3/4': [2, 2, 2], '4/4': [2, 2, 2, 2],
-  '2/8': [2, 2], '3/8': [2, 2, 2], '4/8': [2, 2, 2, 2],
-  '6/4': [3, 3], '9/4': [3, 3, 3], '12/4': [3, 3, 3, 3],
-  '6/8': [3, 3], '9/8': [3, 3, 3], '12/8': [3, 3, 3, 3],
-  '6/16': [3, 3], '9/16': [3, 3, 3], '12/16': [3, 3, 3, 3],
-  '5/8': [2, 3], '7/8': [2, 2, 3], '5/4': [2, 3], '7/4': [2, 2, 3],
-}
 const baseValues = Object.keys(NOTE_VALUES) as StaffPulse['value'][]
 
-export function RhythmExplorer({ metre = false }: { metre?: boolean }) {
-  const [time, setTime] = useState('6/8')
-  const [reverse, setReverse] = useState(false)
+export function RhythmExplorer({ metre = false, ...initialMetre }: { metre?: boolean } & InitialMetre) {
   const [value, setValue] = useState<StaffPulse['value']>('crotchet')
   const [dots, setDots] = useState<0 | 1 | 2>(0)
   const [rest, setRest] = useState(false)
-  const pattern = reverse ? [...metrePatterns[time]].reverse() : metrePatterns[time]
-  const family = pattern.every((size) => size === 2) ? 'Simple' : pattern.every((size) => size === 3) ? 'Compound' : 'Irregular'
-  const pulseUnit = ({
-    '2': 'crotchet', '4': family === 'Simple' ? 'quaver' : 'crotchet',
-    '8': family === 'Simple' ? 'semiquaver' : 'quaver', '16': 'semiquaver',
-  } as const)[time.split('/')[1] as '2' | '4' | '8' | '16']
   const duration = dottedDuration(NOTE_VALUES[value], dots)
   const semibreves = duration.numerator / duration.denominator
   const blocks = Math.max(1, Math.ceil(semibreves))
   return <section className="panel explorer">
     <p className="eyebrow">Interactive example</p><h2>{metre ? 'Metre and grouping explorer' : 'Rhythmic duration explorer'}</h2>
-    {metre ? <>
-      <div className="explorer-fields"><label>Time signature<select value={time} onChange={(e) => setTime(e.target.value)}>
-        {Object.keys(metrePatterns).map((item) => <option key={item}>{item}</option>)}
-      </select></label></div>
-      <p className="metre-caption" aria-live="polite">{family} metre · {pattern.length} main beats · {pattern.join(' + ')}</p>
-      <div className="beat-track" aria-label="Beat groups">
-        {pattern.map((size, i) => <div key={i} className="beat-group" style={{ flex: size }}>
-          <span>Beat {i + 1}</span>
-          <div>{Array.from({ length: size }, (_, j) => <span key={j} aria-label={`Subdivision ${j + 1}`} className={j === 0 ? 'beat-accent' : ''} />)}</div>
-        </div>)}
-      </div>
-      <Staff rhythm={pattern.flatMap((size) => Array.from({ length: size }, () => ({ value: pulseUnit })))}
-        beamGroups={pattern} timeSignature={time} hideClef showClefName={false} />
-      {family === 'Irregular' && <button className="button secondary" onClick={() => setReverse(!reverse)}>Reverse group order</button>}
-    </> : <>
+    {metre ? <MetreExplorer {...initialMetre} /> : <>
       <div className="explorer-fields">
         <label>Note value<select value={value} onChange={(e) => setValue(e.target.value as StaffPulse['value'])}>{baseValues.map((name) => <option key={name} value={name}>{clefLabel(name)}</option>)}</select></label>
         <label>Dots<select value={dots} onChange={(e) => setDots(Number(e.target.value) as typeof dots)}>{[0, 1, 2].map((count) => <option key={count}>{count}</option>)}</select></label>

@@ -9,7 +9,7 @@ type Cause = typeof mistakeCauses[number]
 export interface Visit { id: string; at: number }
 export interface Annotation { id: string; cause: Cause | ''; at: number }
 export interface SettingsRecord { id: 'mastery'; value: MasterySettings }
-export interface ExamRecord { id: string; value: unknown }
+export interface ExamRecord { id: string; value: unknown; updatedAtMs?: number }
 export interface ProgressData {
   attempts: Attempt[]
   visits: Visit[]
@@ -19,6 +19,9 @@ export interface ProgressData {
 }
 
 const stores = ['attempts', 'visits', 'annotations', 'settings', 'exams'] as const
+type Store = typeof stores[number]
+type ProgressRow = ProgressData[Store][number]
+export interface ImportSummary { added: number; updated: number; unchanged: number; keptLocal: number }
 const schemaVersion = 2
 const modes = new Set(['practice', 'lesson', 'review', 'diagnostic', 'exam', 'vocabulary'])
 const answerKinds = new Set(['choice', 'pitch', 'numeric', 'dropdown'])
@@ -56,23 +59,54 @@ export async function readProgress(database: IDBDatabase): Promise<ProgressData>
   const [attempts, visits, annotations, settings, exams] = await Promise.all(
     stores.map((store) => request(transaction.objectStore(store).getAll())),
   )
-  return { attempts, visits, annotations, settings, exams: exams.filter((row) => validRow('exams', row)) }
+  return { attempts, visits, annotations, settings, exams: exams.filter((row): row is ExamRecord => validRow('exams', row)) }
 }
 
 export async function writeProgress<K extends keyof ProgressData>(database: IDBDatabase, store: K, record: ProgressData[K][number]) {
   const transaction = database.transaction(store, 'readwrite')
   const done = transactionDone(transaction)
-  transaction.objectStore(store).put(record)
+  const target = transaction.objectStore(store)
+  let saved = record
+  if (store === 'exams') {
+    const exam = stampExam(record as ExamRecord)
+    const lookup = target.get(exam.id)
+    lookup.onsuccess = () => {
+      const existing = lookup.result as ExamRecord | undefined
+      const decision = compareExams(existing, exam, true)
+      if (decision === 'same' || decision === 'keep') {
+        saved = existing as ProgressData[K][number]
+      } else {
+        saved = exam as ProgressData[K][number]
+        target.put(exam)
+      }
+    }
+  } else {
+    target.put(record)
+  }
   await done
+  return saved
 }
 
 export async function writeExamResult(database: IDBDatabase, exam: ExamRecord, attempts: readonly Attempt[]) {
   const transaction = database.transaction(['exams', 'attempts'], 'readwrite')
   const done = transactionDone(transaction)
-  transaction.objectStore('exams').put(exam)
+  const stamped = stampExam(exam)
+  const exams = transaction.objectStore('exams')
   const records = transaction.objectStore('attempts')
-  for (const attempt of attempts) records.put(attempt)
+  let saved = false
+  const lookup = exams.get(stamped.id)
+  lookup.onsuccess = () => {
+    const decision = compareExams(lookup.result, stamped)
+    if (decision === 'keep') return
+    if (decision !== 'same') exams.put(stamped)
+    for (const attempt of attempts) {
+      const existing = records.get(attempt.id)
+      existing.onsuccess = () => { if (existing.result === undefined) records.add(attempt) }
+    }
+    saved = true
+  }
   await done
+  return saved
 }
 
 export function exportProgress(data: ProgressData): string {
@@ -81,6 +115,43 @@ export function exportProgress(data: ProgressData): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (Array.isArray(left)) {
+    return Array.isArray(right) && left.length === right.length && left.every((item, index) => sameJson(item, right[index]))
+  }
+  if (!isRecord(left) || !isRecord(right)) return false
+  const keys = Object.keys(left).filter((key) => left[key] !== undefined)
+  return keys.length === Object.keys(right).filter((key) => right[key] !== undefined).length
+    && keys.every((key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]))
+}
+
+function stampExam(record: ExamRecord): ExamRecord {
+  if (!isExamSession(record.value)) return record
+  const session = record.value
+  const lastEvent = session.status === 'submitted' ? session.submittedAtMs : session.startedAtMs
+  return { ...record, updatedAtMs: Math.max(lastEvent, record.updatedAtMs ?? 0, Date.now()) }
+}
+
+type MergeDecision = 'add' | 'update' | 'same' | 'keep'
+
+function compareExams(existing: ExamRecord | undefined, incoming: ExamRecord, localEdit = false): MergeDecision {
+  if (!existing) return 'add'
+  if (!isExamSession(existing.value)) return 'update'
+  if (!isExamSession(incoming.value)) return 'keep'
+  const current = existing.value
+  const next = incoming.value
+  if (current.startedAtMs !== next.startedAtMs || !sameJson(current.paper, next.paper)) return 'keep'
+  if (sameJson(current, next)) {
+    return next.status === 'active' && (incoming.updatedAtMs ?? -1) > (existing.updatedAtMs ?? -1) ? 'update' : 'same'
+  }
+  if (current.status === 'submitted') return 'keep'
+  if (next.status === 'submitted') return 'update'
+  if (localEdit) return 'update'
+  return incoming.updatedAtMs !== undefined && existing.updatedAtMs !== undefined
+    && incoming.updatedAtMs > existing.updatedAtMs ? 'update' : 'keep'
 }
 
 function isTime(value: unknown): value is number {
@@ -286,27 +357,78 @@ function validSettings(row: Record<string, unknown>): boolean {
     && typeof value.minAccuracy === 'number' && value.minAccuracy > 0 && value.minAccuracy <= 1
 }
 
-function validRow(store: typeof stores[number], row: unknown): boolean {
+function validRow(store: Store, row: unknown): row is ProgressRow {
   if (!isRecord(row) || typeof row.id !== 'string' || !row.id) return false
   switch (store) {
     case 'attempts': return validAttempt(row)
     case 'visits': return isTime(row.at)
     case 'annotations': return isTime(row.at) && (row.cause === '' || mistakeCauses.some((cause) => cause === row.cause))
     case 'settings': return validSettings(row)
-    case 'exams': return isExamSession(row.value)
+    case 'exams': {
+      if (!isExamSession(row.value)) return false
+      const earliestUpdate = row.value.status === 'submitted' ? row.value.submittedAtMs : row.value.startedAtMs
+      return row.updatedAtMs === undefined || (isTime(row.updatedAtMs) && row.updatedAtMs >= earliestUpdate)
+    }
   }
 }
 
-export async function importProgress(database: IDBDatabase, json: string) {
-  const data: unknown = JSON.parse(json)
+function compareRows(store: Store, existing: ProgressRow | undefined, incoming: ProgressRow): MergeDecision {
+  if (store === 'exams') return compareExams(existing as ExamRecord | undefined, incoming as ExamRecord)
+  if (!existing) return 'add'
+  if (sameJson(existing, incoming)) return 'same'
+  if (store === 'visits') return (incoming as Visit).at < (existing as Visit).at ? 'update' : 'keep'
+  if (store === 'annotations') return (incoming as Annotation).at > (existing as Annotation).at ? 'update' : 'keep'
+  return 'keep'
+}
+
+const summaryFields = { add: 'added', update: 'updated', same: 'unchanged', keep: 'keptLocal' } as const
+
+export async function importProgress(database: IDBDatabase, json: string): Promise<ImportSummary> {
+  let data: unknown
+  try {
+    data = JSON.parse(json)
+  } catch {
+    throw new Error('Choose a valid TheoryLab JSON backup.')
+  }
   if (!isRecord(data) || (data.version !== schemaVersion && data.version !== 1)) throw new Error('Unsupported progress file version.')
-  const transactionNames = data.version === 1 ? stores.slice(0, 3) : stores
-  const valid = transactionNames.every((store) => Array.isArray(data[store]) && data[store].every((record) => validRow(store, record)))
-  if (!valid) throw new Error('The progress file contains invalid records.')
+  const transactionNames: readonly Store[] = data.version === 1 ? ['attempts', 'visits', 'annotations'] : ['exams', ...stores.slice(0, 4)]
+  const incoming = new Map<Store, ProgressRow[]>()
+  for (const store of transactionNames) {
+    const records = data[store]
+    if (!Array.isArray(records) || !records.every((row) => validRow(store, row))
+      || new Set(records.map((row) => row.id)).size !== records.length) {
+      throw new Error('The progress file contains invalid or duplicate records.')
+    }
+    incoming.set(store, records)
+  }
   const transaction = database.transaction(transactionNames, 'readwrite')
   const done = transactionDone(transaction)
+  const summary: ImportSummary = { added: 0, updated: 0, unchanged: 0, keptLocal: 0 }
+  const current = new Map<Store, Map<string, ProgressRow>>()
   for (const store of transactionNames) {
-    for (const record of data[store] as unknown[]) transaction.objectStore(store).put(record)
+    const lookup = transaction.objectStore(store).getAll()
+    lookup.onsuccess = () => {
+      current.set(store, new Map((lookup.result as ProgressRow[]).map((row) => [row.id, row])))
+      if (current.size !== transactionNames.length) return
+      const skippedExamStarts = new Set<string>()
+      for (const name of transactionNames) {
+        const target = transaction.objectStore(name)
+        for (const row of incoming.get(name) ?? []) {
+          const existing = current.get(name)?.get(row.id)
+          let decision = compareRows(name, existing, row)
+          if (name === 'exams' && decision === 'keep') {
+            const session = (row as ExamRecord).value
+            if (isExamSession(session) && session.status === 'submitted') skippedExamStarts.add(String(session.startedAtMs))
+          }
+          if (name === 'attempts' && (row as Attempt).mode === 'exam'
+            && row.id.startsWith('exam:') && skippedExamStarts.has(row.id.split(':')[1])
+            && decision !== 'same') decision = 'keep'
+          if (decision === 'add' || decision === 'update') target.put(row)
+          summary[summaryFields[decision]] += 1
+        }
+      }
+    }
   }
   await done
+  return summary
 }

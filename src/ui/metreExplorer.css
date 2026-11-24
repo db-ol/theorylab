@@ -1,0 +1,87 @@
+.metre-explorer {
+  display: grid;
+  gap: 11px;
+  margin-top: 14px;
+}
+
+.metre-field {
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.metre-field legend {
+  margin-bottom: 5px;
+  font-size: .88rem;
+  font-weight: 650;
+}
+
+.metre-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.metre-two-columns .metre-choices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metre-choice {
+  position: relative;
+  min-width: 0;
+}
+
+.metre-choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.metre-choice span {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 3px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: center;
+  font-size: .87rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.metre-choice input:checked + span {
+  border-color: var(--green-text);
+  background: var(--accent);
+  color: var(--green-text);
+  font-weight: 700;
+}
+
+.metre-choice input:focus-visible + span {
+  outline: 2px solid var(--green-text);
+  outline-offset: 2px;
+}
+
+.metre-choice input:hover + span {
+  border-color: var(--green-text);
+}
+
+.metre-explorer .metre-caption {
+  margin: 2px 0 0;
+}
+
+.metre-explorer .beat-track {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metre-explorer .staff {
+  margin-top: 0;
+}

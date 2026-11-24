@@ -1,3 +1,5 @@
+import type { MetreSignature } from '../theory/rhythm'
+
 export interface StudyLesson {
   definition: string
   explanation: string
@@ -5,6 +7,7 @@ export interface StudyLesson {
   mistake: string
   memory: string
   pattern: string
+  metreExample?: { initialSignature: MetreSignature; initialGrouping?: 0 | 1 | 2 }
 }
 
 type Examples = [string, string, string, string, string, string]
@@ -220,7 +223,22 @@ const entries: Record<string, Examples> = {
   ],
 }
 
+const metreExamples: Record<string, NonNullable<StudyLesson['metreExample']>> = {
+  'MET-1-SIMPLE': { initialSignature: '3/4' },
+  'MET-1-BAR': { initialSignature: '2/4' },
+  'MET-1-GROUP': { initialSignature: '3/4' },
+  'MET-2-SIMPLE': { initialSignature: '3/2' },
+  'MET-2-GROUP': { initialSignature: '2/2' },
+  'MET-3-COMPOUND': { initialSignature: '9/8' },
+  'MET-3-COMPOUND-GROUP': { initialSignature: '6/8' },
+  'MET-3-UPBEAT': { initialSignature: '4/4' },
+  'MET-4-METRE': { initialSignature: '9/4' },
+  'MET-4-GROUP': { initialSignature: '6/16' },
+  'MET-5-IRREGULAR': { initialSignature: '5/8' },
+  'MET-5-GROUP': { initialSignature: '7/8', initialGrouping: 1 },
+}
+
 export const rhythmLessons = Object.fromEntries(Object.entries(entries).map(([id, fields]) => {
   const [definition, explanation, example, mistake, memory, pattern] = fields
-  return [id, { definition, explanation, example, mistake, memory, pattern }]
+  return [id, { definition, explanation, example, mistake, memory, pattern, metreExample: metreExamples[id] }]
 })) as Record<string, StudyLesson>

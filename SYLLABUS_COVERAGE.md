@@ -4,6 +4,8 @@ ABRSM's current Music Theory information lists the syllabus introduced in 2020. 
 
 Grades are cumulative. Each row records the grade at which the skill or expansion first applies. References use the printed page numbers in the Qualification Specification. The final column tracks validation of the lesson and assessment. All rows have been mapped to the official scope. Automated validation indicates that tests pass. Independent editorial review is pending. The assessment patterns are TheoryLab designs with original content.
 
+Each mapped lesson ends with three original questions. Automated checks cover question identity, variations and scoring across all 105 objectives. Depending on the skill, a learner selects an option, enters a number, places a note or selects a chord from a list. TheoryLab provides feedback after each answer in lesson checks. [ABRSM Grade 5 online question examples, pages 2 to 5](https://www.abrsm.org/sites/default/files/2023-09/abrsm-ot-reference-sheet-example-questions_online-music-theory-from-2020.pdf)
+
 ## Grade 1
 
 | ID | Grade | Domain | Objective | 中文概念 | 中文说明 | Prerequisites | English terms | Question types | Generation strategy | Specification pages | Implementation | Validation |

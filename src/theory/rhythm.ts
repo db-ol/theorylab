@@ -1,3 +1,8 @@
+export type MetreSignature =
+  | `${2 | 3 | 4}/${2 | 4 | 8}`
+  | `${6 | 9 | 12}/${4 | 8 | 16}`
+  | `${5 | 7}/${4 | 8}`
+
 export interface Rational {
   readonly numerator: number
   readonly denominator: number

@@ -93,6 +93,9 @@ footer { max-width: 1290px; margin: auto; padding: 0 clamp(19px, 3.3vw, 48px) 28
 .stat span { font-size: .88rem; color: var(--muted); }
 .stat strong { grid-column: 2; font: 500 1.95rem Georgia, serif; color: var(--ink); white-space: nowrap; }
 .stat small { font: 500 .88rem system-ui; color: var(--muted); }
+.progress-stat strong, .progress-stat small, .progress-stat progress { grid-column: 1 / -1; }
+.progress-stat progress { height: 5px; }
+.curriculum-progress { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .content-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; align-items: start; }
 .stack { display: grid; gap: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 15px; padding: clamp(18px, 2.45vw, 30px); min-width: 0; box-shadow: var(--shadow); }

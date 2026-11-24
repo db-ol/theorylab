@@ -1,7 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { glossary } from '../curriculum/glossary'
 import { generateStudyQuestion } from '../curriculum/learningContent'
 import { validateAnswer, type Question, type QuestionAnswer } from '../questions'
+import { buildLessonCheck, lessonCheckSize } from '../questions/lessonCheck'
 import { formatPitch, pitchAtStaffPosition, staffPosition } from '../theory'
 import type { Attempt, AttemptMode } from '../learning/progress'
 import { Staff } from './Notation'
@@ -93,8 +94,9 @@ export function QuestionFeedback({ question, correct }: { question: Question; co
   </section>
 }
 
-export function Quiz({ objectiveId, progress, mode = 'practice', onNext }: {
+export function Quiz({ objectiveId, progress, mode = 'practice', onNext, checkItem }: {
   objectiveId: string; progress: Progress; mode?: AttemptMode; onNext?: (attempt: Attempt) => void
+  checkItem?: { question: Question; number: number; total: number }
 }) {
   const generate = (previous?: Question) => {
     const seen = new Set(progress.data.attempts.filter((item) => item.objectiveId === objectiveId).map((item) => item.contentKey))
@@ -111,15 +113,26 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext }: {
     }
     return fallback
   }
-  const [question, setQuestion] = useState(() => generate())
+  const [question, setQuestion] = useState(() => checkItem?.question ?? generate())
   const [answer, setAnswer] = useState<Answer>()
   const [assisted, setAssisted] = useState(false)
   const [showVocabulary, setShowVocabulary] = useState(false)
   const [attempt, setAttempt] = useState<Attempt>()
+  const [saving, setSaving] = useState(false)
   const startAt = useRef(Date.now())
   const lock = useRef(false)
+  const advanceLock = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
+  const saved = attempt && progress.data.attempts.some(item => item.id === attempt.id)
   const terms = glossary.filter(({ english }) => question.terms.some((term) => term.toLowerCase() === english.toLowerCase()))
+  useEffect(() => {
+    if (checkItem) heading.current?.focus()
+  }, [checkItem?.question.id])
+
+  const saveCheckAttempt = (item: Attempt) => {
+    setSaving(true)
+    void progress.save('attempts', item).finally(() => setSaving(false))
+  }
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (answer === undefined || lock.current) return
@@ -127,10 +140,17 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext }: {
     const now = Date.now()
     const item = makeAttempt(question, answer, validateAnswer(question, answer), assisted, mode, now, now - startAt.current)
     setAttempt(item)
-    void progress.save('attempts', item)
+    if (checkItem) saveCheckAttempt(item)
+    else void progress.save('attempts', item)
   }
   const next = () => {
-    if (attempt && onNext) { onNext(attempt); return }
+    if (attempt && onNext) {
+      if (advanceLock.current) return
+      if (checkItem && !saved) { saveCheckAttempt(attempt); return }
+      advanceLock.current = true
+      onNext(attempt)
+      return
+    }
     setQuestion(generate(question))
     heading.current?.focus()
     setAnswer(undefined)
@@ -140,10 +160,18 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext }: {
     lock.current = false
     startAt.current = Date.now()
   }
+  const label = checkItem ? `Knowledge check · Question ${checkItem.number} of ${checkItem.total}`
+    : mode === 'lesson' ? 'Knowledge check' : mode === 'review' ? 'Spaced review' : mode === 'diagnostic' ? 'Diagnostic' : 'Practice question'
+  let nextLabel = 'Next question'
+  if (checkItem) {
+    if (saving) nextLabel = 'Saving answer'
+    else if (!saved) nextLabel = 'Retry saving answer'
+    else if (checkItem.number === checkItem.total) nextLabel = 'See check results'
+  } else if (onNext) nextLabel = 'Continue'
   return <section className="panel quiz">
     <div className="between">
-      <p className="eyebrow">{mode === 'lesson' ? 'Knowledge check' : mode === 'review' ? 'Spaced review' : mode === 'diagnostic' ? 'Diagnostic' : 'Practice question'}</p>
-      {!attempt && <button className="text-button" type="button" aria-expanded={showVocabulary} onClick={() => { setAssisted(true); setShowVocabulary(!showVocabulary) }}>Vocabulary help</button>}
+      <p className="eyebrow">{label}</p>
+      {!attempt && !checkItem && <button className="text-button" type="button" aria-expanded={showVocabulary} onClick={() => { setAssisted(true); setShowVocabulary(!showVocabulary) }}>Vocabulary help</button>}
     </div>
     <h2 ref={heading} tabIndex={-1}>{question.stem}</h2>
     {showVocabulary && !attempt && <div className="help-box">{terms.length
@@ -156,7 +184,48 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext }: {
     </form>
     {attempt && <>
       <QuestionFeedback question={question} correct={attempt.correct} />
-      <button className="button primary" type="button" onClick={next}><Icon name="check" size={17} />{onNext ? 'Continue' : 'Next question'}</button>
+      <button className="button primary" type="button" disabled={saving} onClick={next}><Icon name="check" size={17} />{nextLabel}</button>
     </>}
   </section>
+}
+
+export function LessonCheck({ objectiveId, progress, onComplete }: {
+  objectiveId: string; progress: Progress; onComplete: () => void
+}) {
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [results, setResults] = useState<Attempt[]>([])
+  const heading = useRef<HTMLHeadingElement>(null)
+  const complete = questions.length > 0 && results.length === questions.length
+  useEffect(() => {
+    if (complete) heading.current?.focus()
+  }, [complete])
+
+  const begin = () => {
+    const seen = progress.data.attempts.filter(item => item.objectiveId === objectiveId).map(item => item.contentKey)
+    setQuestions(buildLessonCheck(objectiveId, newSeed(), seen))
+    setResults([])
+  }
+
+  if (complete) return <section className="panel">
+    <h2 ref={heading} tabIndex={-1}>Knowledge check complete</h2>
+    <p>{results.filter(attempt => attempt.correct).length} of {questions.length} correct</p>
+    <div className="button-row">
+      <a className="button primary" href={`#/practice/${objectiveId}`}>Keep practising</a>
+      <button className="button secondary" type="button" onClick={begin}>Try another check</button>
+    </div>
+  </section>
+
+  const question = questions[results.length]
+  if (!question) return <section className="panel">
+    <h2>Knowledge check</h2>
+    <p>Answer {lessonCheckSize} original exam style questions in English. Review the explanation after each answer.</p>
+    <button className="button primary" type="button" onClick={begin}>Start knowledge check</button>
+  </section>
+
+  return <Quiz key={`${results.length}:${question.id}`} objectiveId={objectiveId} progress={progress} mode="lesson"
+    checkItem={{ question, number: results.length + 1, total: questions.length }} onNext={(attempt) => {
+      const updated = [...results, attempt]
+      setResults(updated)
+      if (updated.length === questions.length) onComplete()
+    }} />
 }
