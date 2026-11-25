@@ -9,6 +9,7 @@ import { Staff } from './Notation'
 import { ExamStimulus } from './ExamStimulus'
 import { PitchAnswer } from './PitchAnswer'
 import { Icon } from './Icon'
+import { useInterfaceLanguage } from './interfaceLanguage'
 import type { Progress } from './useProgress'
 
 export const newSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]
@@ -42,18 +43,19 @@ function QuestionFigure({ question }: { question: Question }) {
 export function QuestionInput({ question, answer, onAnswer, disabled }: {
   question: Question; answer: Answer | undefined; onAnswer: (answer: Answer | undefined) => void; disabled?: boolean
 }) {
+  const { t } = useInterfaceLanguage()
   if (question.answerKind === 'pitch') return <PitchAnswer key={question.id} question={question} answer={answer} onAnswer={onAnswer} disabled={disabled} />
   return <>
     <QuestionFigure question={question} />
-    {question.answerKind === 'numeric' ? <label className="numeric-answer">Your answer
+    {question.answerKind === 'numeric' ? <label className="numeric-answer">{t('Your answer', '你的答案')}
       <input type="number" step="any" inputMode="decimal" disabled={disabled} value={typeof answer === 'number' ? answer : ''} onChange={(e) => onAnswer(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
-    </label> : question.answerKind === 'dropdown' ? <label className="numeric-answer">Your answer
+    </label> : question.answerKind === 'dropdown' ? <label className="numeric-answer">{t('Your answer', '你的答案')}
       <select disabled={disabled} value={typeof answer === 'string' ? answer : ''} onChange={(e) => onAnswer(e.target.value || undefined)}>
-        <option value="">Select an answer</option>{question.options.map((option) => <option key={option.id} value={option.id}>{option.text}</option>)}
+        <option value="">{t('Select an answer', '选择一个答案')}</option>{question.options.map((option) => <option key={option.id} value={option.id} lang="en">{option.text}</option>)}
       </select>
     </label> : <fieldset className={question.options.some(option => option.stimulus) ? 'option-list score-options' : 'option-list'} disabled={disabled}>
-      <legend className="sr-only">Answer options</legend>
-      {question.options.map((option, i) => <label key={option.id} className={answer === option.id ? 'selected' : ''}>
+      <legend className="sr-only">{t('Answer options', '答题选项')}</legend>
+      {question.options.map((option, i) => <label key={option.id} lang="en" className={answer === option.id ? 'selected' : ''}>
         <input type="radio" name={question.id} value={option.id} checked={answer === option.id} onChange={() => onAnswer(option.id)}/>
         <span aria-hidden="true" className="option-letter">{String.fromCharCode(65 + i)}</span>
         {option.stimulus ? <><span className="sr-only">{option.text}</span><ExamStimulus stimulus={option.stimulus}/></> : <span>{option.text}</span>}
@@ -63,17 +65,18 @@ export function QuestionInput({ question, answer, onAnswer, disabled }: {
 }
 
 export function QuestionFeedback({ question, correct, showPrompt = false }: { question: Question; correct: boolean; showPrompt?: boolean }) {
+  const { t } = useInterfaceLanguage()
   return <section className={`feedback ${correct ? 'correct' : 'incorrect'}`} aria-live="polite">
-    <h3>{correct ? 'Correct' : 'Review this answer'}</h3>
+    <h3>{correct ? t('Correct', '答对了') : t('Review this answer', '查看答案解析')}</h3>
     {showPrompt && <QuestionFigure question={question} />}
     <p lang="zh-Hans">{question.explanationZh}</p>
     {question.options.length > 0 && <ul>
       {question.options.map((option) => <li key={option.id}>
-        <strong>{option.text}{option.id === question.correctAnswer.optionId ? ' ✓' : ''}</strong>
+        <strong lang="en">{option.text}{option.id === question.correctAnswer.optionId ? ' ✓' : ''}</strong>
         {showPrompt && <ExamStimulus stimulus={option.stimulus}/>}<span lang="zh-Hans">{option.explanationZh}</span>
       </li>)}
     </ul>}
-    <a href={`#/lesson/${question.objectiveId}`}>Open the lesson</a>
+    <a href={`#/lesson/${question.objectiveId}`}>{t('Open the lesson', '查看课程')}</a>
   </section>
 }
 
@@ -81,6 +84,7 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext, checkIt
   objectiveId: string; progress: Progress; mode?: AttemptMode; onNext?: (attempt: Attempt) => void
   checkItem?: { question: Question; number: number; total: number }
 }) {
+  const { t } = useInterfaceLanguage()
   const generate = (previous?: Question) => {
     const seen = new Set(progress.data.attempts.filter((item) => item.objectiveId === objectiveId).map((item) => item.contentKey))
     const previousKey = previous?.contentKey ?? previous?.id
@@ -143,27 +147,29 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext, checkIt
     lock.current = false
     startAt.current = Date.now()
   }
-  const label = checkItem ? `Knowledge check · Question ${checkItem.number} of ${checkItem.total}`
-    : mode === 'lesson' ? 'Knowledge check' : mode === 'review' ? 'Spaced review' : mode === 'diagnostic' ? 'Diagnostic' : 'Practice question'
-  let nextLabel = 'Next question'
+  const label = checkItem ? t(`Knowledge check · Question ${checkItem.number} of ${checkItem.total}`, `知识检查，第 ${checkItem.number} 题，共 ${checkItem.total} 题`)
+    : mode === 'lesson' ? t('Knowledge check', '知识检查')
+      : mode === 'review' ? t('Spaced review', '间隔复习')
+        : mode === 'diagnostic' ? t('Diagnostic', '摸底测验') : t('Practice question', '练习题')
+  let nextLabel = t('Next question', '下一题')
   if (checkItem) {
-    if (saving) nextLabel = 'Saving answer'
-    else if (!saved) nextLabel = 'Retry saving answer'
-    else if (checkItem.number === checkItem.total) nextLabel = 'See check results'
-  } else if (onNext) nextLabel = 'Continue'
+    if (saving) nextLabel = t('Saving answer', '正在保存答案')
+    else if (!saved) nextLabel = t('Retry saving answer', '重新保存答案')
+    else if (checkItem.number === checkItem.total) nextLabel = t('See check results', '查看检查结果')
+  } else if (onNext) nextLabel = t('Continue', '继续')
   return <section className="panel quiz">
     <div className="between">
       <p className="eyebrow">{label}</p>
-      {!attempt && !checkItem && <button className="text-button" type="button" aria-expanded={showVocabulary} onClick={() => { setAssisted(true); setShowVocabulary(!showVocabulary) }}>Vocabulary help</button>}
+      {!attempt && !checkItem && <button className="text-button" type="button" aria-expanded={showVocabulary} onClick={() => { setAssisted(true); setShowVocabulary(!showVocabulary) }}>{t('Vocabulary help', '词汇提示')}</button>}
     </div>
-    <h2 ref={heading} tabIndex={-1}>{question.stem}</h2>
+    <h2 ref={heading} tabIndex={-1} lang="en">{question.stem}</h2>
     {showVocabulary && !attempt && <div className="help-box">{terms.length
-      ? terms.map((term) => <p key={term.english}><strong>{term.english}</strong> <span lang="zh-Hans">{term.chinese}</span></p>)
+      ? terms.map((term) => <p key={term.english}><strong lang="en">{term.english}</strong> <span lang="zh-Hans">{term.chinese}</span></p>)
       : <p lang="zh-Hans">先找出题目要求的操作，再确定它针对哪个音乐概念。</p>}
     </div>}
     <form onSubmit={submit}>
       <QuestionInput question={question} answer={answer} onAnswer={setAnswer} disabled={Boolean(attempt)}/>
-      {!attempt && <button className="button primary" type="submit" disabled={answer === undefined}>Check answer</button>}
+      {!attempt && <button className="button primary" type="submit" disabled={answer === undefined}>{t('Check answer', '核对答案')}</button>}
     </form>
     {attempt && <>
       <QuestionFeedback question={question} correct={attempt.correct} />
@@ -175,10 +181,12 @@ export function Quiz({ objectiveId, progress, mode = 'practice', onNext, checkIt
 export function LessonCheck({ objectiveId, progress, onComplete }: {
   objectiveId: string; progress: Progress; onComplete: () => void
 }) {
+  const { t } = useInterfaceLanguage()
   const [questions, setQuestions] = useState<Question[]>([])
   const [results, setResults] = useState<Attempt[]>([])
   const heading = useRef<HTMLHeadingElement>(null)
   const complete = questions.length > 0 && results.length === questions.length
+  const correctCount = results.filter(attempt => attempt.correct).length
   useEffect(() => {
     if (complete) heading.current?.focus()
   }, [complete])
@@ -190,19 +198,20 @@ export function LessonCheck({ objectiveId, progress, onComplete }: {
   }
 
   if (complete) return <section className="panel">
-    <h2 ref={heading} tabIndex={-1}>Knowledge check complete</h2>
-    <p>{results.filter(attempt => attempt.correct).length} of {questions.length} correct</p>
+    <h2 ref={heading} tabIndex={-1}>{t('Knowledge check complete', '已完成知识检查')}</h2>
+    <p>{t(`${correctCount} of ${questions.length} correct`, `${questions.length} 题中答对 ${correctCount} 题`)}</p>
     <div className="button-row">
-      <a className="button primary" href={`#/practice/${objectiveId}`}>Keep practising</a>
-      <button className="button secondary" type="button" onClick={begin}>Try another check</button>
+      <a className="button primary" href={`#/practice/${objectiveId}`}>{t('Keep practising', '继续练习')}</a>
+      <button className="button secondary" type="button" onClick={begin}>{t('Try another check', '再做一组')}</button>
     </div>
   </section>
 
   const question = questions[results.length]
   if (!question) return <section className="panel">
-    <h2>Knowledge check</h2>
-    <p>Answer {lessonCheckSize} original exam style questions in English. Review the explanation after each answer.</p>
-    <button className="button primary" type="button" onClick={begin}>Start knowledge check</button>
+    <h2>{t('Knowledge check', '知识检查')}</h2>
+    <p>{t(`Answer ${lessonCheckSize} original exam style questions in English. Review the explanation after each answer.`,
+      `完成 ${lessonCheckSize} 道原创全英文考题。每题作答后都可查看解析。`, false)}</p>
+    <button className="button primary" type="button" onClick={begin}>{t('Start knowledge check', '开始知识检查')}</button>
   </section>
 
   return <Quiz key={`${results.length}:${question.id}`} objectiveId={objectiveId} progress={progress} mode="lesson"

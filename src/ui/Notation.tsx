@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useInterfaceLanguage } from './interfaceLanguage'
 import { formatAccidental, formatPitch, getKeySignature, midiNumber, parsePitch, staffPosition, type Clef, type Pitch } from '../theory'
 import type { RhythmPulse, RhythmTuplet } from '../questions/stimulus'
 
@@ -98,7 +99,7 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
   ]
   const label = `${hideClef ? 'Rhythm stave' : showClefName ? clefNames[clef] + ' clef staff' : 'Music notation'}${timeSignature ? ', ' + timeSignature : ''}${rhythmDescription ? ', ' + rhythmDescription : ''}${showNames ? ', ' + notes.map(formatPitch).join(', ') : ''}`
   return <div className="staff">
-    <svg viewBox={`0 ${-above} ${width} ${129 + above + below}`} role="img" aria-label={[label, ...markings].filter(Boolean).join('. ')}>
+    <svg lang="en" viewBox={`0 ${-above} ${width} ${129 + above + below}`} role="img" aria-label={[label, ...markings].filter(Boolean).join('. ')}>
       {[0, 1, 2, 3, 4].map((line) => <line key={line} x1="16" x2={width - 15} y1={39 + line * 12} y2={39 + line * 12} className="staff-line" />)}
       {answerRange && <g>
         <rect data-pitch-target="" x={(xAt(0) + xAt(1)) / 2} y={87 - answerRange.max * 6 - 3}
@@ -166,7 +167,7 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
       })}
       {rhythm && <line x1={width - 16} x2={width - 16} y1="39" y2="87" stroke="currentColor" strokeWidth="1.4"/>}
     </svg>
-    {(showNames || showClefName) && <div className="staff-caption">{showClefName && <span>{clefNames[clef]} clef</span>}{showNames && <strong>{notes.map(formatPitch).join(' · ')}</strong>}</div>}
+    {(showNames || showClefName) && <div className="staff-caption" lang="en">{showClefName && <span>{clefNames[clef]} clef</span>}{showNames && <strong>{notes.map(formatPitch).join(' · ')}</strong>}</div>}
   </div>
 }
 
@@ -202,6 +203,7 @@ async function playMidi(notes: readonly number[], together = false) {
 }
 
 export function Keyboard({ pitches }: { pitches: readonly Pitch[] }) {
+  const { t } = useInterfaceLanguage()
   const notes = pitches.map(midiNumber)
   const low = Math.min(...notes)
   const high = Math.max(...notes)
@@ -212,12 +214,12 @@ export function Keyboard({ pitches }: { pitches: readonly Pitch[] }) {
   const name = (note: number) => `${chromatic[note % 12]}${Math.floor(note / 12) - 1}`
   const play = (note: number) => { void playMidi([note]).catch(() => setAudioError(true)) }
   return <>
-    <div className="keyboard" role="group" aria-label="Piano keyboard. Select a key to hear it.">
+    <div className="keyboard" role="group" aria-label={t('Piano keyboard. Select a key to hear it.', '钢琴键盘。选择琴键即可试听。', false)}>
       {whiteNotes.map((note, i) => <div className="key-slot" key={note}>
-        <button type="button" aria-label={`Play ${name(note)}`} className={`white-key ${notes.includes(note) ? 'key-active' : ''}`} onClick={() => play(note)}>{note % 12 === 0 ? name(note) : ''}</button>
-        {i < whiteNotes.length - 1 && black.has((note + 1) % 12) && <button type="button" aria-label={`Play ${name(note + 1)}`} className={`black-key ${notes.includes(note + 1) ? 'key-active' : ''}`} onClick={() => play(note + 1)} />}
+        <button type="button" aria-label={t(`Play ${name(note)}`, `试听 ${name(note)}`)} className={`white-key ${notes.includes(note) ? 'key-active' : ''}`} onClick={() => play(note)}>{note % 12 === 0 ? name(note) : ''}</button>
+        {i < whiteNotes.length - 1 && black.has((note + 1) % 12) && <button type="button" aria-label={t(`Play ${name(note + 1)}`, `试听 ${name(note + 1)}`)} className={`black-key ${notes.includes(note + 1) ? 'key-active' : ''}`} onClick={() => play(note + 1)} />}
       </div>)}
     </div>
-    {audioError && <p role="status" className="muted">Audio is unavailable on this device.</p>}
+    {audioError && <p role="status" className="muted">{t('Audio is unavailable on this device.', '此设备无法播放音频。', false)}</p>}
   </>
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NOTE_VALUES, multiplyDuration, rational, tupletDuration, type Rational } from '../theory'
+import { useInterfaceLanguage } from './interfaceLanguage'
 import './tupletExplorer.css'
 
 export type TupletLesson = 'triplet' | 'irregular'
@@ -7,6 +8,7 @@ type TupletValue = 'quaver' | 'semiquaver'
 
 interface TupletExample {
   label: string
+  labelChinese: string
   count: number
   ordinaryCount: number
   value: TupletValue
@@ -17,25 +19,25 @@ interface TupletExample {
 export const tupletExamples: Record<TupletLesson, readonly TupletExample[]> = {
   triplet: [
     {
-      label: 'Triplet quavers', count: 3, ordinaryCount: 2, value: 'quaver',
+      label: 'Triplet quavers', labelChinese: '八分音符三连音', count: 3, ordinaryCount: 2, value: 'quaver',
       chinese: '括号上的 3：2 表示三个 quavers 占两个普通 quavers 的时间。两行都占一拍。上行把这一拍平分成三份，下行平分成两份。',
     },
     {
-      label: 'Triplet semiquavers', count: 3, ordinaryCount: 2, value: 'semiquaver',
+      label: 'Triplet semiquavers', labelChinese: '十六分音符三连音', count: 3, ordinaryCount: 2, value: 'semiquaver',
       chinese: '三个 semiquavers 的三连音占两个普通 semiquavers 的时间，也就是半拍。这半拍再平分成三份，每个连音成员占全拍的 1/6。',
     },
     {
-      label: 'Triplet with a rest', count: 3, ordinaryCount: 2, value: 'quaver', restIndex: 1,
+      label: 'Triplet with a rest', labelChinese: '带休止符的三连音', count: 3, ordinaryCount: 2, value: 'quaver', restIndex: 1,
       chinese: '中间的休止符也占三连音中的一份。第二份保持安静，第三个位置仍按原来的时间开始。整组依旧占一拍。',
     },
   ],
   irregular: [
     {
-      label: 'Quintuplet semiquavers', count: 5, ordinaryCount: 4, value: 'semiquaver',
+      label: 'Quintuplet semiquavers', labelChinese: '十六分音符五连音', count: 5, ordinaryCount: 4, value: 'semiquaver',
       chinese: '括号上的 5：4 表示五个 semiquavers 占四个普通 semiquavers 的时间，也就是一个四分音符拍。上行五等分，每个成员占 1/5 拍。下行四等分，每个普通音占 1/4 拍。',
     },
     {
-      label: 'Sextuplet semiquavers', count: 6, ordinaryCount: 4, value: 'semiquaver',
+      label: 'Sextuplet semiquavers', labelChinese: '十六分音符六连音', count: 6, ordinaryCount: 4, value: 'semiquaver',
       chinese: '括号上的 6：4 表示六个 semiquavers 占四个普通 semiquavers 的时间。上行把一拍均分成六份，每个成员占 1/6 拍。两行的结束位置相同。',
     },
   ],
@@ -68,6 +70,7 @@ function TupletStaff({ count, value, position, steps, inTimeOf, restIndex }: {
   inTimeOf?: number
   restIndex?: number
 }) {
+  const { t } = useInterfaceLanguage()
   const beamCount = value === 'quaver' ? 1 : 2
   const beamLeft = xAt(0, count) + 6
   const beamRight = xAt(count - 1, count) + 6
@@ -75,8 +78,12 @@ function TupletStaff({ count, value, position, steps, inTimeOf, restIndex }: {
   const playhead = xAt(position, steps)
   const active = Math.floor(position * count / steps)
   const title = inTimeOf
-    ? `Tuplet stave. ${count} ${value} positions${restIndex === undefined ? '' : ', with a rest in the middle'}. Ratio ${count} to ${inTimeOf}.`
-    : `Ordinary stave. ${count} ${value}s.`
+    ? t(
+      `Tuplet stave. ${count} ${value} positions${restIndex === undefined ? '' : ', with a rest in the middle'}. Ratio ${count} to ${inTimeOf}.`,
+      `连音谱例。共有 ${count} 个连音成员，符号采用 ${value} 的写法${restIndex === undefined ? '' : '，其中中间一份是休止符'}。比例为 ${count} 比 ${inTimeOf}。`,
+      false,
+    )
+    : t(`Ordinary stave. ${count} ${value}s.`, `普通时值谱例。共有 ${count} 个 ${value}。`, false)
   return <svg viewBox="0 0 400 105" className="tuplet-stave" role="img" aria-label={title}>
     {[60, 68, 76, 84, 92].map((line) => <line key={line} x1="10" x2="390" y1={line} y2={line} className="tuplet-staff-line" />)}
     {[start, end].map((x) => <line key={x} x1={x} x2={x} y1="12" y2="98" className="tuplet-guide" />)}
@@ -106,6 +113,7 @@ function TupletStaff({ count, value, position, steps, inTimeOf, restIndex }: {
 }
 
 export function TupletExplorer({ lesson, chinese = false }: { lesson: TupletLesson; chinese?: boolean }) {
+  const { t, language } = useInterfaceLanguage()
   const [selected, setSelected] = useState(0)
   const [position, setPosition] = useState(0)
   const examples = tupletExamples[lesson]
@@ -120,33 +128,38 @@ export function TupletExplorer({ lesson, chinese = false }: { lesson: TupletLess
     setPosition(0)
   }
   const tupletCount = restIndex === undefined ? `${count} ${value}s` : `${count - 1} ${value}s and a ${value} rest`
+  const tupletCountChinese = restIndex === undefined ? `${count} 个 ${value}` : `${count - 1} 个 ${value} 音符与 1 个 ${value} 休止符`
+  const elapsedLabel = t(`${beatLabel(elapsed)} from the start`, `距起点 ${fraction(elapsed)} 拍（crotchet beats）`, false)
+  const localiseBeat = (duration: Rational) => t(beatLabel(duration), `${fraction(duration)} 拍（crotchet beats）`, false)
 
   return <div className="tuplet-explorer">
-    <div className="tuplet-examples" role="group" aria-label="Tuplet examples">
+    <div className="tuplet-examples" role="group" aria-label={t('Tuplet examples', '连音示例')}>
       {examples.map((item, index) => <button key={item.label} type="button" className="button secondary"
-        aria-pressed={selected === index} onClick={() => chooseExample(index)}>{item.label}</button>)}
+        aria-pressed={selected === index} onClick={() => chooseExample(index)}>{t(item.label,
+          language === 'zh' ? `${item.labelChinese}（${item.label}）` : item.labelChinese)}</button>)}
     </div>
-    <p>{count} equal parts fit into the time of {ordinaryCount} ordinary {value}s.</p>
+    <p>{t(`${count} equal parts fit into the time of ${ordinaryCount} ordinary ${value}s.`,
+      `${count} 个等分合计占 ${ordinaryCount} 个普通 ${value} 的时值。`, false)}</p>
     <figure className="tuplet-score">
-      <div className="tuplet-axis" aria-hidden="true"><span>Start</span><span>End</span></div>
-      <p className="tuplet-row-label">Tuplet · {tupletCount}</p>
+      <div className="tuplet-axis" aria-hidden="true"><span>{t('Start', '起点')}</span><span>{t('End', '终点')}</span></div>
+      <p className="tuplet-row-label">{t(`Tuplet · ${tupletCount}`, `连音：${tupletCountChinese}`, false)}</p>
       <TupletStaff count={count} value={value} position={position} steps={steps} inTimeOf={ordinaryCount} restIndex={restIndex} />
-      <p className="tuplet-row-label">Ordinary · {ordinaryCount} {value}s</p>
+      <p className="tuplet-row-label">{t(`Ordinary · ${ordinaryCount} ${value}s`, `普通时值：${ordinaryCount} 个 ${value}`, false)}</p>
       <TupletStaff count={ordinaryCount} value={value} position={position} steps={steps} />
-      <figcaption>Both rows share the same start and end.</figcaption>
+      <figcaption>{t('Both rows share the same start and end.', '两行同时开始，同时结束。', false)}</figcaption>
     </figure>
     <div className="tuplet-position">
       <label>
-        <span>Time position</span>
+        <span>{t('Time position', '时间位置')}</span>
         <input type="range" min={0} max={steps} step={1} value={position} onChange={(event) => setPosition(Number(event.target.value))}
-          aria-valuetext={`${beatLabel(elapsed)} from the start`} />
+          aria-valuetext={elapsedLabel} />
       </label>
-      <output>{beatLabel(elapsed)} from the start</output>
+      <output>{elapsedLabel}</output>
     </div>
     <dl className="tuplet-duration">
-      <div><dt>Each tuplet member</dt><dd>{beatLabel(member)}</dd></div>
-      <div><dt>Each ordinary note</dt><dd>{beatLabel(ordinary)}</dd></div>
-      <div><dt>Each complete row</dt><dd>{beatLabel(group)}</dd></div>
+      <div><dt>{t('Each tuplet member', '每个连音成员')}</dt><dd>{localiseBeat(member)}</dd></div>
+      <div><dt>{t('Each ordinary note', '每个普通音符')}</dt><dd>{localiseBeat(ordinary)}</dd></div>
+      <div><dt>{t('Each complete row', '每行的总时值')}</dt><dd>{localiseBeat(group)}</dd></div>
     </dl>
     {chinese && <p lang="zh-Hans" className="tuplet-help">{example.chinese}</p>}
   </div>

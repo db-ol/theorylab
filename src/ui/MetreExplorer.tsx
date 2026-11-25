@@ -1,5 +1,6 @@
 import { useId, useReducer } from 'react'
 import type { MetreSignature } from '../theory'
+import { useInterfaceLanguage } from './interfaceLanguage'
 import { Staff, type StaffPulse } from './Notation'
 import './metreExplorer.css'
 
@@ -8,6 +9,7 @@ const families = [
   { name: 'Compound', signatures: ['6/4', '9/4', '12/4', '6/8', '9/8', '12/8', '6/16', '9/16', '12/16'], initial: '6/8' },
   { name: 'Irregular', signatures: ['5/8', '7/8', '5/4', '7/4'], initial: '5/8' },
 ] as const
+const familyLabels = { Simple: '单拍子', Compound: '复拍子', Irregular: '不规则拍子' } as const
 
 type Family = typeof families[number]
 type GroupingIndex = 0 | 1 | 2
@@ -70,20 +72,28 @@ function Choices<Value extends string | number>({ label, options, value, onChang
 export type InitialMetre = { initialSignature?: MetreSignature; initialGrouping?: GroupingIndex }
 
 export function MetreExplorer({ initialSignature = '6/8', initialGrouping = 0 }: InitialMetre) {
+  const { t, language } = useInterfaceLanguage()
   const [selection, select] = useReducer(changeMetre, { signature: initialSignature, grouping: initialGrouping })
   const { family, unit, groupings, groupingIndex, beats, rhythm } = metreExample(selection)
+  const pattern = beats.join(' + ')
   return <div className="metre-explorer">
-    <Choices label="Metre" options={families.map(({ name }) => ({ value: name, label: name }))}
+    <Choices label={t('Metre', '拍子')} options={families.map(({ name }) => ({
+      value: name, label: t(name, language === 'zh' ? `${familyLabels[name]}（${name}）` : familyLabels[name]),
+    }))}
       value={family.name} onChange={(next) => select({ family: next })} />
-    <Choices label="Time signature" options={family.signatures.map((signature) => ({ value: signature, label: signature }))}
+    <Choices label={t('Time signature', '拍号')} options={family.signatures.map((signature) => ({ value: signature, label: signature }))}
       value={selection.signature} onChange={(signature) => select({ signature })} className={family.name === 'Irregular' ? 'metre-two-columns' : ''} />
-    {groupings.length > 1 && <Choices label="Beat grouping" options={groupings.map((beats, index) => ({ value: index, label: beats.join(' + ') }))}
+    {groupings.length > 1 && <Choices label={t('Beat grouping', '拍组排列')} options={groupings.map((beats, index) => ({ value: index, label: beats.join(' + ') }))}
       value={groupingIndex} onChange={(grouping) => select({ grouping })} className={groupings.length === 2 ? 'metre-two-columns' : ''} />}
-    <p className="metre-caption" role="status">{family.name} metre · {beats.length} main beats · {beats.join(' + ')}. {rhythm.length} {unit}s in the bar.</p>
-    <ol className="beat-track" aria-label="Beat groups">
+    <p className="metre-caption" role="status">{t(
+      `${family.name} metre · ${beats.length} main beats · ${pattern}. ${rhythm.length} ${unit}s in the bar.`,
+      `${familyLabels[family.name]}（${family.name} metre），共 ${beats.length} 个主拍，分为 ${pattern}。本小节的时值相当于 ${rhythm.length} 个 ${unit}。`,
+      false,
+    )}</p>
+    <ol className="beat-track" aria-label={t('Beat groups', '拍组')}>
       {beats.map((size, index) => <li key={index} className="beat-group" style={{ flex: size }}>
-        <span>Beat {index + 1}</span>
-        <span className="sr-only">, {size} {unit}s</span>
+        <span>{t(`Beat ${index + 1}`, `第 ${index + 1} 拍`, false)}</span>
+        <span className="sr-only">{t(`, ${size} ${unit}s`, `，${size} 个 ${unit} 时值`, false)}</span>
         <div aria-hidden="true">{Array.from({ length: size }, (_, pulse) => <span key={pulse} className={pulse === 0 ? 'beat-accent' : ''} />)}</div>
       </li>)}
     </ol>

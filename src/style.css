@@ -59,9 +59,27 @@ main:focus { outline: none; }
 .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--ink); font: 600 26px Georgia, serif; letter-spacing: -.055em; text-decoration: none; }
 .brand-icon { display: grid; place-items: center; width: 41px; height: 41px; border-radius: 13px; color: #f7f2e5; background: var(--green); }
 .header-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.icon-button, .help-toggle { min-height: 40px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 0 12px; }
+.icon-button, .language-trigger { min-height: 40px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 0 12px; }
 .icon-button { display: grid; place-items: center; width: 40px; padding: 0; }
-.help-toggle[aria-pressed="true"] { color: var(--green-text); background: var(--accent); }
+.language-menu { position: relative; }
+.language-trigger { display: flex; align-items: center; justify-content: center; gap: 7px; }
+.language-trigger[aria-expanded="true"] { color: var(--green-text); background: var(--accent); }
+.language-popover { position: absolute; z-index: 1; top: calc(100% + 8px); right: 0; width: min(365px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
+.language-options { display: grid; gap: 14px; }
+.panel > .language-options { margin-top: 16px; }
+.language-options fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
+.language-options legend { padding: 0; margin-bottom: 8px; font-size: .91rem; font-weight: 650; }
+.language-choices { display: flex; flex-wrap: wrap; gap: 5px; }
+.language-choices label { display: inline-flex; position: relative; align-items: center; justify-content: center; min-height: 40px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.language-choices label:has(input:checked) { color: var(--green-text); background: var(--accent); border-color: var(--green-text); }
+.language-choices label:has(input:focus-visible) { outline: 3px solid #be7e2c; outline-offset: 2px; }
+.language-choices input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.lesson-language-option { display: flex; min-height: 40px; align-items: center; gap: 8px; cursor: pointer; }
+.language-options .lesson-language-option input { width: 18px; height: 18px; min-height: 0; flex-shrink: 0; padding: 0; accent-color: var(--green-text); }
+.dual-label [lang="zh-Hans"] { font-size: .9em; font-weight: 500; }
+.sidebar .dual-label { white-space: normal; line-height: 1.25; }
+.sidebar .dual-label > span { display: inline-block; }
+.sidebar a > svg { flex-shrink: 0; }
 .menu-button { display: none; }
 .sidebar { position: sticky; align-self: start; top: 70px; height: calc(100svh - 70px); display: flex; flex-direction: column; justify-content: space-between; padding: 24px 14px; border-right: 1px solid var(--line); background: var(--panel); }
 .sidebar nav { display: grid; gap: 6px; }
@@ -203,6 +221,8 @@ input[type="range"] { display: block; accent-color: var(--green-text); width: 10
 @media (max-width: 760px) {
   .app-shell { grid-template-columns: 1fr; grid-template-rows: 60px 1fr; }
   .topbar { padding-inline: 13px; }
+  .language-menu { position: static; }
+  .language-popover { top: calc(100% + 4px); right: 12px; }
   .brand { font-size: 23px; gap: 7px; }
   .brand-icon { width: 33px; height: 33px; }
   .menu-button { display: grid; }
@@ -218,8 +238,6 @@ input[type="range"] { display: block; accent-color: var(--green-text); width: 10
   .hero { display: block; padding: 25px 21px; min-height: 0; }
   .hero-art { display: none; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .help-word { display: none; }
-  .help-toggle { font-size: .83rem; padding-inline: 8px; }
   .pitch-inputs { grid-template-columns: 1fr; }
   .objective-row small { white-space: normal; }
 }
@@ -261,3 +279,9 @@ input[type="range"] { display: block; accent-color: var(--green-text); width: 10
 .placement-stave [data-pitch-target] { cursor: crosshair; }
 .placement-stave .staff svg { max-height: 340px; }
 .pitch-answer .pitch-inputs { grid-template-columns: minmax(8rem, 1fr) auto; }
+
+@media (max-width: 380px) {
+  .topbar { gap: 6px; padding-inline: 8px; }
+  .brand-icon { display: none; }
+  .language-trigger { gap: 4px; padding-inline: 6px; }
+}

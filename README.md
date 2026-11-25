@@ -26,6 +26,8 @@ The build goes into `dist`. For GitHub Pages, select **GitHub Actions** as the P
 
 ## Study workflow
 
+Use the globe in the header or open **Settings** to choose English, Simplified Chinese or a bilingual interface. In bilingual mode, main controls show English first with a short Chinese label. The separate **Chinese lesson explanations** switch keeps its own setting. Both preferences are remembered in the current browser. Theory practice questions use English in all modes. Opening a mock exam switches the interface to English automatically. Leaving the exam restores the chosen interface language.
+
 - **Learn** with written explanations and interactive notation. In metre lessons, choose a metre family, a time signature and, where applicable, a beat grouping. Compare tuplets with ordinary notes on two staves that share a time cursor. End each lesson with three original English questions and review the Chinese feedback.
 - **Practise** in English and review Chinese reasoning after submitting. Optional vocabulary help is recorded separately.
 - **Review** errors with fresh questions on the same objective. Mastery requires varied independent answers and a later successful review.
