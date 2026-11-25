@@ -249,3 +249,15 @@ input[type="range"] { display: block; accent-color: var(--green-text); width: 10
 
 .duration-units span { overflow: hidden; }
 .duration-units i { background: #5d927a; display: block; height: 100%; }
+
+.score-options { grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+.score-options label { min-width: 0; gap: 6px; padding: 7px; }
+.score-options label > :last-child { flex: 1; min-width: 0; margin-block: 0; }
+.score-options .staff svg { max-height: 145px; }
+.notehead-palette { display: flex; flex-wrap: wrap; gap: 6px; }
+.notehead-palette button { display: grid; justify-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: inherit; padding: 4px 7px; touch-action: none; cursor: grab; }
+.notehead-palette button[aria-pressed="true"] { background: var(--accent); outline: 2px solid var(--green-text); }
+.notehead-palette svg { width: 48px; height: 26px; }
+.placement-stave [data-pitch-target] { cursor: crosshair; }
+.placement-stave .staff svg { max-height: 340px; }
+.pitch-answer .pitch-inputs { grid-template-columns: minmax(8rem, 1fr) auto; }

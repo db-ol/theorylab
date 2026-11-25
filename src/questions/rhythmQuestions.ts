@@ -1,13 +1,13 @@
 import { objectives } from '../curriculum/objectives'
 import { NOTE_VALUES, addDuration, dottedDuration, multiplyDuration, rational, tupletDuration, type Rational } from '../theory'
-import type { ExamStimulus, Grade5Question, NoteValue } from '../exam/grade5'
-import { makeOptions } from './question'
+import { makeOptions, type Question } from './question'
 import { createRandom, type QuestionSeed, type Random } from './random'
+import type { ExamStimulus, NoteValue } from './stimulus'
+import { generateVisualRhythmQuestion, isVisualRhythmObjective } from './visualRhythmQuestions'
 
 type Draft = { stem: string; answer: string | number; wrong: (string | number)[]; why: string; variant: string; stimulus?: ExamStimulus }
 
 const basic = ['semibreve', 'minim', 'crotchet', 'quaver', 'semiquaver'] as const
-const shortest = ['quaver', 'semiquaver', 'demisemiquaver'] as const
 const plurality = (count: number, name: string) => `${count} ${name}${count === 1 ? '' : 's'}`
 const ratio = (value: Rational, unit: NoteValue) => multiplyDuration(value, rational(NOTE_VALUES[unit].denominator, NOTE_VALUES[unit].numerator))
 const show = (value: Rational) => value.denominator === 1 ? value.numerator : `${value.numerator}/${value.denominator}`
@@ -47,7 +47,6 @@ function countQuestion(random: Random, id: string): Draft {
 
 function tripletQuestion(random: Random, id: string): Draft {
   const [count, inTimeOf, unit] = id === 'RHY-4-DUPLET' ? [2, 3, random.pick(['quaver', 'crotchet', 'semiquaver'] as const)] as const
-    : id === 'RHY-5-TUPLET' ? [random.pick([5, 6]), 4, random.pick(shortest)] as const
     : [3, 2, id === 'RHY-3-TRIPLET' ? 'demisemiquaver' : random.pick(['minim', 'quaver', 'crotchet', 'semiquaver'] as const)] as const
   const one = tupletDuration(NOTE_VALUES[unit], count, inTimeOf)
   const member = random.integer(0, 1) === 1
@@ -64,27 +63,14 @@ function tripletQuestion(random: Random, id: string): Draft {
 
 function metreQuestion(random: Random, id: string): Draft {
   const compound = id.startsWith('MET-3') || id === 'RHY-4-REST-GROUP'
-  const irregular = id.startsWith('MET-5')
   const extended = id.startsWith('MET-4')
   const simpleDenom = id.startsWith('MET-1') ? 4 : id.startsWith('MET-2') ? random.pick([2, 8]) : random.pick([2, 4, 8, 16])
   const compoundDenom = id.startsWith('MET-3') ? 8 : id === 'RHY-4-REST-GROUP' ? 4 : random.pick([4, 8, 16])
   const split = compound || extended && random.integer(0, 1) === 1 ? 3 : 2
-  const top = id === 'RHY-4-REST-GROUP' ? random.pick([6, 9]) : irregular ? random.pick([5, 7]) : (simpleDenom === 8 && id.startsWith('MET-2') ? 3 : random.pick([2, 3, 4])) * (split === 3 ? 3 : 1)
-  const bottom = irregular ? random.pick([4, 8]) : split === 3 ? compoundDenom : simpleDenom
+  const top = id === 'RHY-4-REST-GROUP' ? random.pick([6, 9]) : (simpleDenom === 8 && id.startsWith('MET-2') ? 3 : random.pick([2, 3, 4])) * (split === 3 ? 3 : 1)
+  const bottom = split === 3 ? compoundDenom : simpleDenom
   const signature = `${top}/${bottom}`
   const base = ({ 2: 'minim', 4: 'crotchet', 8: 'quaver', 16: 'semiquaver' } as const)[bottom as 2 | 4 | 8 | 16]
-  if (id.endsWith('GROUP') && irregular) {
-    const group = random.pick(top === 7 ? ['2 + 2 + 3', '2 + 3 + 2', '3 + 2 + 2'] : ['2 + 3', '3 + 2'])
-    const starts = group.split(' + ').map(Number).slice(0, -1).reduce((values, count) => [...values, values[values.length - 1] + count], [1])
-    if (random.integer(0, 1) === 1) {
-      const chosen = random.integer(2, starts.length)
-      return { stem: `A bar of ${signature} is grouped ${group}. Which numbered ${base} starts beat ${chosen}?`,
-        answer: starts[chosen - 1], wrong: [], variant: 'choose-beat-start',
-        why: `从第一单位开始，跨过前 ${chosen - 1} 个小组，落到第 ${starts[chosen - 1]} 个 ${base}。` }
-    }
-    return { stem: `A bar of ${signature} is grouped ${group}. On which ${base}s do the main beats start?`, answer: starts.join(', '),
-      wrong: ['1, 2', '1, 6', '1, 2, 3'], variant: 'accent-positions', why: `从第一个 ${base} 起，每走完一组就到下一个拍点，所以落在第 ${starts.join('、')} 个单位。` }
-  }
   if (id.endsWith('GROUP') || id === 'RHY-4-REST-GROUP') {
     const value = split === 3 ? (bottom === 4 ? 'minim' : bottom === 8 ? 'crotchet' : 'quaver') : base
     const description = `${split === 3 ? 'Dotted ' : ''}${value}`
@@ -135,11 +121,6 @@ function metreQuestion(random: Random, id: string): Draft {
       answer: barLength - used, wrong: [], variant: id === 'MET-3-UPBEAT' ? 'balance-upbeat' : 'complete-bar',
       why: `完整小节的长度是 ${barLength} 个 ${units}，减去已经写出的 ${used} 个，剩下 ${barLength - used} 个。` }
   }
-  if (irregular) {
-    const bars = random.integer(1, 5)
-    return { stem: `How many ${base}s have the duration of ${plurality(bars, 'complete bar')} of ${signature}?`, answer: top * bars, wrong: [],
-      why: `${signature} 的分母指定 ${base} 单位，分子说明一小节共有 ${top} 个单位。${bars} 小节共有 ${top * bars} 个。`, variant: bars === 1 ? 'bar-length' : 'span-length' }
-  }
   const lengthQuestion = random.integer(0, 1) === 1
   if (lengthQuestion) {
     const bars = random.integer(1, 4)
@@ -161,9 +142,10 @@ function metreQuestion(random: Random, id: string): Draft {
     why: `${signature} 是单拍子，每拍用一个 ${base} 表示。分母 ${bottom} 给出了这个时值。` }
 }
 
-export function generateRhythmQuestion(id: string, seed: QuestionSeed): Grade5Question {
+export function generateRhythmQuestion(id: string, seed: QuestionSeed): Question {
   const objective = objectives.find((item) => item.id === id)
   if (!objective || !/^(RHY|MET)-/.test(id)) throw new Error(`Unknown rhythm objective ${id}`)
+  if (isVisualRhythmObjective(id)) return generateVisualRhythmQuestion(id, seed, objective.terms)
   const random = createRandom(`rhythm-v1:${id}:${seed}`)
   let draft: Draft
   if (id === 'RHY-1-TIE') {

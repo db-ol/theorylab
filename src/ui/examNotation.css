@@ -1,0 +1,52 @@
+.exam-grand-staff {
+  margin-block: 12px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid #67766d;
+}
+
+.exam-grand-staff .staff {
+  margin-block: 0;
+  border-radius: 0;
+}
+
+.exam-grand-staff .staff svg {
+  max-height: none;
+}
+
+.exam-grand-staff .staff:first-child {
+  border-radius: 8px 8px 0 0;
+  border-bottom: 0;
+}
+
+.exam-grand-staff .staff:last-child {
+  border-radius: 0 0 8px 8px;
+  border-top: 0;
+}
+
+.cadence-score {
+  display: grid;
+  gap: 10px;
+}
+
+.cadence-score .cadence-phrase {
+  margin-block: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.cadence-score .cadence-phrase:last-child {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cadence-score .numeric-answer {
+  margin-block: 6px 0;
+}
+
+.cadence-score select {
+  width: 100%;
+}
+
+@media (max-width: 490px) {
+  .cadence-score .cadence-phrase:last-child { grid-template-columns: 1fr; }
+}

@@ -252,3 +252,23 @@ it('rejects an invalid original question snapshot or attempt mode without writin
   expect(await readProgress(db)).toMatchObject({ attempts: [], visits: [] })
   db.close()
 })
+
+it('preserves option scores across devices and rejects malformed notation before importing', async () => {
+  const db = await openProgress('visual-question-roundtrip')
+  const attempt = intervalAttempt('visual-attempt')
+  const question = attempt.question!
+  const pulses = Array.from({ length: 5 }, () => ({ value: 'semiquaver' as const }))
+  const rhythm = { kind: 'rhythm' as const, pulses, beamGroups: [5], groupStarts: [0], tuplets: [{ start: 0, count: 5, inTimeOf: 4 }] }
+  question.options[0].stimulus = rhythm
+  await importProgress(db, backup({ attempts: [attempt] }))
+  expect((await readProgress(db)).attempts[0].question?.options[0].stimulus).toEqual(rhythm)
+  for (const changes of [{ beamGroups: [3, 3] }, { tuplets: [{ start: 1, count: 5, inTimeOf: 4 }] },
+    { groupStarts: [5] }, { tuplets: [...rhythm.tuplets, ...rhythm.tuplets] }]) {
+    const invalid = structuredClone(attempt)
+    invalid.id = 'invalid'
+    invalid.question!.options[0].stimulus = { ...rhythm, ...changes }
+    await expect(importProgress(db, backup({ attempts: [invalid] }))).rejects.toThrow()
+  }
+  expect((await readProgress(db)).attempts).toHaveLength(1)
+  db.close()
+})

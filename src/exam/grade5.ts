@@ -1,37 +1,17 @@
 import {
   CLEFS, NOTE_VALUES, SCALE_DEGREES, addDuration, buildScale, buildScaleTriad, compareDuration,
   describeInterval, dottedDuration, enharmonicSpellings, formatInterval, formatPitch, formatPitchName,
-  getKeySignature, identifyCadence, invertTriad, midiNumber, parsePitch, pitchAtStaffPosition,
-  rational, scaleDegree, staffPosition, transposeInstrumentPitch, transposeOctaves, tupletDuration,
+  getKeySignature, identifyCadence, invertTriad, keySignatureFor, midiNumber, parsePitch, pitchAtStaffPosition,
+  rational, sameSpelling, scaleDegree, staffPosition, transposeInstrumentPitch, transposeOctaves, tupletDuration,
   type Clef, type Pitch, type Rational, type ScaleForm,
 } from '../theory'
 import { createRandom, generateIntervalQuestion, makeOptions, type Question, type QuestionOption, type Random } from '../questions'
+import type { ExamExcerpt, ExamStimulus, RhythmPulse, RhythmStimulus } from '../questions/stimulus'
 import { performanceTerms } from '../curriculum/performanceTerms'
 import type { ExamSlot } from './engine'
 
-export type NoteValue = keyof typeof NOTE_VALUES
-export interface RhythmPulse {
-  value: NoteValue
-  dots?: 1 | 2
-  rest?: boolean
-  tieAfter?: boolean
-  pitch?: Pitch
-}
-
-export interface ExamExcerpt {
-  clef: Clef
-  keySignature: number
-  timeSignature: string
-  bars: readonly { pulses: readonly RhythmPulse[]; dynamic?: string; direction?: string }[]
-}
-
-export type ExamStimulus =
-  | { kind: 'rhythm'; pulses: readonly RhythmPulse[]; timeSignature?: string }
-  | { kind: 'excerpt'; excerpt: ExamExcerpt }
-
-export interface Grade5Question extends Question {
-  stimulus?: ExamStimulus
-}
+export type { ExamExcerpt, ExamStimulus, NoteValue, RhythmPulse } from '../questions/stimulus'
+export type Grade5Question = Question
 
 type Draft = Omit<Grade5Question, 'id' | 'seed' | 'difficulty' | 'contentKey'>
 type Details = Omit<Draft, 'options' | 'correctAnswer' | 'explanationZh' | 'answerKind'>
@@ -63,21 +43,25 @@ function pitchNames(pitches: readonly Pitch[], octaves = false): string {
 }
 
 const signatureChoices = [
-  { signature: '6/8', pulses: [{ value: 'crotchet', dots: 1 }, { value: 'crotchet', dots: 1 }] },
-  { signature: '7/8', pulses: [{ value: 'crotchet', dots: 1 }, { value: 'crotchet' }, { value: 'crotchet' }] },
-  { signature: '5/8', pulses: [{ value: 'crotchet' }, { value: 'crotchet', dots: 1 }] },
+  { signature: '6/8', pulses: [{ value: 'quaver' }, { value: 'quaver' }, { value: 'quaver' }, { value: 'crotchet', dots: 1 }], beamGroups: [3, 1] },
+  { signature: '7/8', pulses: [{ value: 'quaver' }, { value: 'quaver' }, { value: 'crotchet', dots: 1 }, { value: 'crotchet' }], beamGroups: [2, 1, 1] },
+  { signature: '5/8', pulses: [{ value: 'crotchet' }, { value: 'quaver' }, { value: 'quaver' }, { value: 'quaver' }], beamGroups: [1, 3] },
   { signature: '4/4', pulses: [{ value: 'minim' }, { value: 'crotchet' }, { value: 'quaver' }, { value: 'quaver', rest: true }] },
-  { signature: '9/8', pulses: [{ value: 'crotchet', dots: 1 }, { value: 'crotchet', dots: 1 }, { value: 'crotchet', dots: 1 }] },
+  { signature: '9/8', pulses: [{ value: 'crotchet', dots: 1 }, { value: 'crotchet', dots: 1 }, { value: 'quaver' }, { value: 'quaver' }, { value: 'quaver' }], beamGroups: [1, 1, 3] },
   { signature: '7/4', pulses: [{ value: 'minim' }, { value: 'minim' }, { value: 'minim', dots: 1 }] },
   { signature: '9/4', pulses: [{ value: 'minim', dots: 1 }, { value: 'minim', dots: 1 }, { value: 'minim', dots: 1 }] },
-] as const satisfies ReadonlyArray<{ signature: string; pulses: readonly RhythmPulse[] }>
+] satisfies ReadonlyArray<{ signature: string; pulses: readonly RhythmPulse[]; beamGroups?: readonly number[] }>
 
-function durationOf(pulse: RhythmPulse): Rational {
-  return dottedDuration(NOTE_VALUES[pulse.value], pulse.dots ?? 0)
+function staffRhythm(random: Random, pulses: readonly RhythmPulse[], clef: Clef): RhythmPulse[] {
+  let position = random.integer(2, 5)
+  return pulses.map(pulse => {
+    position = Math.max(0, Math.min(8, position + random.pick([-2, -1, 0, 1, 2])))
+    return { ...pulse, pitch: pitchAtStaffPosition(position, clef) }
+  })
 }
 
 function barDuration(pulses: readonly RhythmPulse[]): Rational {
-  return pulses.reduce((total, pulse) => addDuration(total, durationOf(pulse)), rational(0))
+  return pulses.reduce((total, pulse) => addDuration(total, dottedDuration(NOTE_VALUES[pulse.value], pulse.dots ?? 0)), rational(0))
 }
 
 function timeDuration(signature: string): Rational {
@@ -85,17 +69,90 @@ function timeDuration(signature: string): Rational {
   return rational(numerator, denominator)
 }
 
+function diagramChoices(
+  random: Random, details: Details, diagrams: readonly { stimulus: ExamStimulus; explanationZh: string }[],
+): Draft {
+  const correct = diagrams[0]
+  const options = random.shuffle(diagrams).map((diagram, index) => ({
+    ...diagram, id: String(index + 1), text: `Notation ${String.fromCharCode(65 + index)}`,
+  }))
+  return {
+    ...details, options, correctAnswer: { optionId: options.find(({ stimulus }) => stimulus === correct.stimulus)!.id },
+    explanationZh: correct.explanationZh, answerKind: 'choice',
+  }
+}
+
+function convertRhythm(random: Random): Draft {
+  const beats = random.pick([2, 3])
+  const subdividedBeat = random.integer(0, beats - 1)
+  const clef = random.pick(['treble', 'bass'] as const)
+  const dot: RhythmPulse = { value: 'crotchet', dots: 1 }
+  const quaver: RhythmPulse = { value: 'quaver' }
+  const pulses = staffRhythm(random, Array.from({ length: beats }, (_, index) =>
+    index === subdividedBeat ? [quaver, quaver, quaver] : [dot]).flat(), clef)
+  const first = subdividedBeat
+  const beamGroups = Array.from({ length: beats }, (_, index) => index === subdividedBeat ? 3 : 1)
+  const right: RhythmStimulus = {
+    kind: 'rhythm', clef, timeSignature: `${beats}/4`, beamGroups,
+    pulses: pulses.map(({ pitch }, index) => ({ pitch, value: index >= first && index < first + 3 ? 'quaver' : 'crotchet' })),
+    tuplets: [{ start: first, count: 3, inTimeOf: 2 }],
+  }
+  return diagramChoices(random, {
+    objectiveId: 'RHY-2-TRIPLET', variant: 'rewrite-compound-in-simple',
+    stem: 'Select the notation that preserves the rhythm when this bar is rewritten in simple time.',
+    terms: ['simple time', 'compound time', 'triplet'],
+    stimulus: { kind: 'rhythm', clef, pulses, beamGroups, timeSignature: `${beats * 3}/8` },
+  }, [
+    { stimulus: right, explanationZh: '复拍子的附点四分音符占一拍，换成单拍子就是一个四分音符。同一拍内三个均分的八分音符，改写后要用八分音符三连音，仍保持等长。' },
+    ...[
+      { quaverAt: first, beam: [1, 2], explanationZh: '这一拍中的第一个音占半拍，后面两个各占四分之一拍。原来三个音各占三分之一拍。' },
+      { quaverAt: first + 2, beam: [2, 1], explanationZh: '第三个音占半拍，前面两个各占四分之一拍。虽然仍满一拍，但改变了三个音之间的时值比例。' },
+    ].map(({ quaverAt, beam, explanationZh }) => ({
+      stimulus: {
+        ...right, tuplets: undefined, beamGroups: [...beamGroups.slice(0, first), ...beam, ...beamGroups.slice(first + 1)],
+        pulses: right.pulses.map((pulse, index): RhythmPulse => index >= first && index < first + 3 && index !== quaverAt
+          ? { ...pulse, value: 'semiquaver' } : pulse),
+      },
+      explanationZh,
+    })),
+  ])
+}
+
+function beamingQuestion(random: Random): Draft {
+  const right = random.pick([[3, 3], [3, 3, 3], [2, 2, 3], [2, 3, 2], [3, 2, 2]])
+  const count = right.reduce((a, b) => a + b, 0)
+  const irregular = count === 7
+  const clef = random.pick(['treble', 'bass'] as const)
+  const pulses = staffRhythm(random, Array.from({ length: count }, () => ({ value: 'quaver' })), clef)
+  const patterns = irregular ? [[2, 2, 3], [2, 3, 2], [3, 2, 2]] : [right, [2, 4, ...right.slice(2)], [4, 2, ...right.slice(2)]]
+  const pattern = right.join(' + ')
+  return diagramChoices(random, {
+    objectiveId: irregular ? 'MET-5-GROUP' : 'MET-4-GROUP', variant: 'select-beaming',
+    stem: irregular
+      ? `Select the beaming that shows the marked ${pattern} grouping in 7/8.`
+      : `Select the correctly beamed bar in ${count}/8.`,
+    terms: ['beaming', irregular ? 'irregular time signature' : 'compound time'],
+  }, [right, ...patterns.filter(group => group.join() !== right.join())].map((beamGroups) => ({
+    stimulus: { kind: 'rhythm', clef, timeSignature: `${count}/8`, pulses, beamGroups },
+    explanationZh: beamGroups === right
+      ? `按 ${pattern} 将八分音符分组，并在每组内用符杠相连。读谱时可按符杠看出每拍或每组的开始。`
+      : `此处的符杠分组是 ${beamGroups.join(' + ')}。总时值正确，但题目要求的分组是 ${pattern}。`,
+  })))
+}
+
 function rhythmQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
   const { group, part } = slot
   if (group === 1) {
     const choices = paperRandom.shuffle(signatureChoices)
-    const { signature, pulses } = choices[part - 1]
+    const { signature, pulses, beamGroups } = choices[part - 1]
+    const clef = random.pick(['treble', 'bass'] as const)
     return choose(random, {
       objectiveId: ['5/8', '7/8', '7/4'].includes(signature) ? 'MET-5-IRREGULAR' : 'MET-4-METRE', variant: 'complete-bar',
       stem: 'Select the time signature that gives exactly the duration of this complete bar.', terms: ['time signature', 'bar'],
-      stimulus: { kind: 'rhythm', pulses },
+      stimulus: { kind: 'rhythm', clef, pulses: staffRhythm(random, pulses, clef), beamGroups },
     }, signature, choices.filter(choice => choice.signature !== signature).slice(0, 3).map(choice => [choice.signature, `这个拍号需要 ${choice.signature} 个全音符的时值。图中的音符和休止符加起来是 ${signature} 个。`]), `图中的时值合计为 ${signature} 个全音符。此拍号分母指定单位，分子指定一小节有几个这样的单位。`)
   }
+  if (group === 2 && random.integer(0, 3) !== 0) return convertRhythm(random)
   if (group === 2) {
     const [count, base, reference] = random.pick([[3, 'quaver', 'crotchet'], [5, 'semiquaver', 'crotchet'], [6, 'semiquaver', 'crotchet']] as const)
     const inTimeOf = count === 3 ? 2 : 4
@@ -108,7 +165,13 @@ function rhythmQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Dr
     const answer = `One ${correctValue}`
     return choose(random, {
       objectiveId: count === 3 ? 'RHY-2-TRIPLET' : 'RHY-5-TUPLET', variant: 'tuplet-equivalence',
-      stem: `A ${name} group contains ${count} ${base}s in the time of ${inTimeOf} ordinary ${base}s. What is the duration of the complete group?`, terms: [name, base, reference],
+      stem: 'Which note has the same duration as the complete group shown?',
+      terms: [name, base, reference],
+      stimulus: {
+        kind: 'rhythm', clef: 'treble', beamGroups: [count],
+        pulses: staffRhythm(random, Array.from({ length: count }, () => ({ value: base })), 'treble'),
+        tuplets: [{ start: 0, count, inTimeOf }],
+      },
     }, answer, [
       ['One quaver', '一个 quaver 只占半个 crotchet 的时值。'],
       ['One dotted crotchet', '附点将一个 crotchet 的时值增加一半，比整组更长。'],
@@ -126,13 +189,7 @@ function rhythmQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Dr
     return numeric({ objectiveId: 'RHY-4-BREVE', variant: 'breve-equivalence', stem: `How many ${note}s have the same total duration as one breve?`, terms: ['breve', note] }, notes,
       `一个 breve 等于两个 semibreve。每个 semibreve 含 ${notes / 2} 个 ${note}，合计 ${notes} 个。`)
   }
-  if (group === 4) {
-    const pattern = random.pick(['2 + 2 + 3', '2 + 3 + 2', '3 + 2 + 2'])
-    const toWords = (sequence: string) => sequence.split(' + ').map(size => `${size} quavers`).join(', then ')
-    return choose(random, { objectiveId: 'MET-5-GROUP', variant: 'irregular-grouping', stem: `A bar of 7/8 is marked ${pattern}. Which beaming follows the specified grouping?`, terms: ['irregular time signature', 'beaming'] },
-      toWords(pattern), ['2 + 2 + 3', '2 + 3 + 2', '3 + 2 + 2'].filter(sequence => sequence !== pattern).map(sequence => [toWords(sequence), `这种符杠连接体现 ${sequence}，而题目标记给出的顺序是 ${pattern}。`]),
-      `先按标记把七个 quaver 分成 ${pattern}，再在每组内连接符杠。总时值相同的其他顺序会把重心放在不同位置。`)
-  }
+  if (group === 4) return beamingQuestion(random)
   const { signature: barSignature, pulses } = paperRandom.shuffle(signatureChoices)[part + 2]
   const signature = random.pick([barSignature, signatureChoices[(part + 1) % signatureChoices.length].signature])
   const total = barDuration(pulses)
@@ -143,8 +200,80 @@ function rhythmQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Dr
   }, matches, `将每个时值换算成全音符的分数并相加，得到 ${total.numerator}/${total.denominator}。题中拍号规定 ${signature} 个全音符。两者${matches ? '相等' : '不相等'}。`)
 }
 
+function concertPitchQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
+  const { instrument, interval, name } = paperRandom.pick([
+    { instrument: 'A', interval: 'minor 3rd', name: 'clarinet in A' },
+    { instrument: 'B♭', interval: 'major 2nd', name: 'trumpet in B♭' },
+    { instrument: 'F', interval: 'perfect 5th', name: 'horn in F' },
+  ] as const)
+  const keySignature = paperRandom.pick([-1, 0, 1, 2])
+  const tonic = parsePitch(`${getKeySignature(keySignature).major}4`)
+  const scale = buildScale(tonic, 'major')
+  const soundingTonic = transposeInstrumentPitch(tonic, instrument, 'sounding')
+  const targetKey = keySignatureFor(soundingTonic, 'major').count
+  const mistakes = paperRandom.shuffle([0, 1, 2, 3, 4]).slice(0, 2)
+  const first = paperRandom.integer(0, 4)
+  const altered = { ...scale[first + 1], accidental: scale[first + 1].accidental + paperRandom.pick([-1, 1]) }
+  const written = [scale[first], altered, scale[first + 2], scale[first + 1]]
+  const correctPitches = written.map(note => transposeInstrumentPitch(note, instrument, 'sounding'))
+  const proposed = correctPitches.map((pitch, index) => mistakes.includes(index + 1)
+    ? { ...pitch, accidental: pitch.accidental + (pitch.accidental > 0 ? -1 : 1) }
+    : pitch)
+  const proposedKey = mistakes.includes(0) ? targetKey + paperRandom.pick([-1, 1]) : targetKey
+  const durations = ['crotchet', 'quaver', 'quaver', 'crotchet'] as const
+  const excerpt: ExamExcerpt = {
+    clef: 'treble', keySignature, timeSignature: '6/8',
+    bars: [
+      { label: 'Written pitch', pulses: written.map((pitch, index) => ({ pitch, value: durations[index] })) },
+      { label: 'Proposed concert pitch', keySignature: proposedKey, pulses: proposed.map((pitch, index) => ({ pitch, value: durations[index] })) },
+    ],
+  }
+  const index = slot.part - 2
+  const ordinal = ['first', 'second', 'third', 'fourth'][index]
+  const detail = index < 0 ? 'key signature' : `${ordinal} note`
+  const right = index < 0 ? targetKey === proposedKey : sameSpelling(proposed[index], correctPitches[index])
+  const rationale = index < 0
+    ? `将原调主音 ${formatPitchName(tonic)} 向下移 ${interval}，得到 ${formatPitchName(soundingTonic)}。所以新调号应是 ${signatureTerm(targetKey)}。图中是 ${signatureTerm(proposedKey)}。`
+    : `第 ${index + 1} 个原音 ${formatPitch(written[index])} 向下移 ${interval} 后，是 ${formatPitch(correctPitches[index])}。图中相应音为 ${formatPitch(proposed[index])}，要同时检查度数、半音数及临时记号。`
+  return trueFalse(random, {
+    objectiveId: 'TRN-5-CONCERT', variant: 'check-concert-transposition',
+    stem: `For the ${name}, transpose down a ${interval} to find concert pitch. The ${detail} in the proposed version is correct.`,
+    terms: ['written pitch', 'sounding pitch', 'concert pitch'], stimulus: { kind: 'excerpt', excerpt },
+  }, right, rationale)
+}
+
+function compareOctaves(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
+  const tonic = parsePitch(paperRandom.pick(['C4', 'D4', 'F4']))
+  const scale = buildScale(tonic, 'major')
+  const keySignature = keySignatureFor(tonic, 'major').count
+  const motif = [scale[0], scale[1], scale[3], scale[2], scale[1]]
+  const durations = ['quaver', 'quaver', 'crotchet', 'quaver', 'quaver'] as const
+  const offsets = [0, paperRandom.pick([0, -1]), paperRandom.pick([0, 1])]
+  const clefs = ['treble', 'bass', 'alto'] as const
+  const excerpt: ExamExcerpt = {
+    clef: 'treble', keySignature, timeSignature: '3/4',
+    bars: offsets.map((offset, index) => ({
+      label: `Bar ${String.fromCharCode(65 + index)}`, clef: clefs[index], beamGroups: [2, 1, 2],
+      pulses: motif.map((pitch, note) => ({ value: durations[note], pitch: transposeOctaves(pitch, offset) })),
+    })),
+  }
+  const [from, to, expected, description] = [
+    [0, 1, 0, 'is at the same pitch as'],
+    [2, 1, -1, 'is one octave lower than'],
+    [0, 2, 1, 'is one octave higher than'],
+  ][slot.part - 1] as [number, number, number, string]
+  const firstPitch = (bar: number) => formatPitch(excerpt.bars[bar].pulses[0].pitch!)
+  const rise = offsets[to] - offsets[from]
+  return trueFalse(random, {
+    objectiveId: 'TRN-5-OCTAVE', variant: 'compare-clefs-and-octaves',
+    stem: `${excerpt.bars[to].label} ${description} ${excerpt.bars[from].label}.`,
+    terms: ['octave', 'treble clef', 'bass clef', 'alto clef'], stimulus: { kind: 'excerpt', excerpt },
+  }, rise === expected,
+  `按每个谱号读出首音。${excerpt.bars[to].label} 从 ${firstPitch(to)} 开始，${excerpt.bars[from].label} 从 ${firstPitch(from)} 开始。两段旋律的其余音保持相同的八度关系。`)
+}
+
 function pitchQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
-  const { group, part } = slot
+  const { group } = slot
   const clef = random.pick(CLEFS)
   if (group === 1) {
     const keySignature = random.integer(-6, 6)
@@ -177,43 +306,7 @@ function pitchQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Dra
       }), rationale, 'pitch')
     return { ...choice, correctAnswer: { ...choice.correctAnswer, pitch: target } }
   }
-  if (group === 3) {
-    const commonClef = paperRandom.pick(CLEFS)
-    const keySignature = paperRandom.pick([-6, -4, -2, 2, 4, 6])
-    const signature = getKeySignature(keySignature)
-    const start = paperRandom.integer(1, 4)
-    const lower = pitchAtStaffPosition(start, commonClef)
-    const higher = pitchAtStaffPosition(start + 3, commonClef)
-    const pitches = [
-      { ...lower, accidental: keySignature > 0 ? 2 : -2 },
-      { ...lower, accidental: keySignature > 0 ? 2 : -2 },
-      { ...higher, accidental: signature.accidentals[higher.letter] ?? 0 },
-      { ...lower, accidental: 0 },
-      { ...lower, accidental: 0 },
-    ]
-    const expected = pitches[part - 1]
-    const trueAnswer = random.integer(0, 1) === 1
-    const claimed = { ...expected, accidental: trueAnswer ? expected.accidental : expected.accidental === 0 ? 1 : 0 }
-    const ordinal = ['first', 'second', 'third', 'fourth', 'fifth'][part - 1]
-    return trueFalse(random, { objectiveId: 'PIT-4-DOUBLE', variant: 'accidentals-in-bar',
-      stem: `The ${ordinal} note in the bar is ${formatPitchName(claimed)}.`, terms: ['double sharp', 'double flat', 'natural sign'],
-      notation: { clef: commonClef, keySignature, pitches } }, trueAnswer,
-    `第 ${part} 个音是 ${formatPitchName(expected)}。同一小节内同一个谱表位置会沿用此前的临时记号，直到出现新的变化记号。`)
-  }
-  const instruments = [{ instrument: 'B♭', interval: 'major 2nd' }, { instrument: 'A', interval: 'minor 3rd' }, { instrument: 'F', interval: 'perfect 5th' }] as const
-  const { instrument, interval } = paperRandom.shuffle(instruments)[part - 1]
-  const target = random.pick(['written', 'sounding'] as const)
-  const source = random.pick(['G4', 'C5', 'B♭4', 'F♯4'])
-  const origin = parsePitch(source)
-  const transformed = transposeInstrumentPitch(origin, instrument, target)
-  const offered = random.integer(0, 1) ? transformed : { ...transformed, accidental: transformed.accidental + 1 }
-  const expected = midiNumber(offered) === midiNumber(transformed)
-  const from = target === 'written' ? 'sounding' : 'written'
-  const direction = target === 'written' ? 'up' : 'down'
-  return trueFalse(random, { objectiveId: 'TRN-5-CONCERT', variant: 'concert-transposition',
-    stem: `For an instrument in ${instrument}, transpose ${direction} a ${interval} to find ${target} pitch. The ${target} pitch corresponding to ${from} ${source} is ${formatPitch(offered)}.`,
-    terms: ['written pitch', 'sounding pitch', 'concert pitch'] }, expected,
-  `按题意将 ${source} ${direction === 'up' ? '向上' : '向下'}移一个 ${interval}，得到 ${formatPitch(transformed)}。先按音程度数确定字母，再检查半音数。`)
+  return group === 3 ? concertPitchQuestion(slot, random, paperRandom) : compareOctaves(slot, random, paperRandom)
 }
 
 function signatureTerm(count: number): string {
@@ -328,61 +421,97 @@ const cadenceOptions = [
 
 const roman = { 1: 'I', 2: 'II', 4: 'IV', 5: 'V' } as const
 const positions = ['root position (a)', 'first inversion (b)', 'second inversion (c)'] as const
+type CadentialDegree = keyof typeof roman
+type HarmonyStimulus = Extract<ExamStimulus, { kind: 'harmony' }>
+
+function fitInClef(pitch: Pitch, clef: Clef, bottom: number): Pitch {
+  return transposeOctaves(pitch, -Math.floor((staffPosition(pitch, clef) - bottom) / 7))
+}
+
+function grandStaffChord(pitches: readonly Pitch[], label?: string): HarmonyStimulus['chords'][number] {
+  const treble = pitches.map(pitch => fitInClef(pitch, 'treble', 0)).sort((a, b) => midiNumber(a) - midiNumber(b))
+  return { treble, bass: fitInClef(pitches[0], 'bass', 0), label }
+}
+
+function cadenceMatching(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
+  const keySignature = paperRandom.pick([-1, 0, 1, 2])
+  const key = getKeySignature(keySignature).major
+  const tonic = parsePitch(`${key}4`)
+  const degrees: readonly CadentialDegree[] = [paperRandom.pick([1, 2, 4]), 5, 1, paperRandom.pick([4, 5]), 1]
+  const choices = [1, 2, 4, 5] as const
+  const chords = new Map(choices.map(degree => [degree, buildScaleTriad(tonic, 'major', degree)]))
+  const excerpt: ExamExcerpt = {
+    clef: 'treble', keySignature, timeSignature: '3/4',
+    bars: degrees.map((degree, index) => {
+      const chord = chords.get(degree)!
+      const [a, b, c] = paperRandom.shuffle(chord).map(pitch => fitInClef(pitch, 'treble', -1))
+      const label = String.fromCharCode(65 + index)
+      if (index % 2 === 0) {
+        return { label, beamGroups: [2, 1, 1], pulses: [
+          { value: 'quaver', pitch: a }, { value: 'quaver', pitch: b },
+          { value: 'crotchet', pitch: a }, { value: 'crotchet', pitch: c },
+        ] }
+      }
+      return { label, pulses: [a, b, c].map(pitch => ({ value: 'crotchet', pitch })) }
+    }),
+  }
+  const { label, pulses } = excerpt.bars[slot.part - 1]
+  const notes = [...new Set(pulses.map(pulse => formatPitchName(pulse.pitch!)))]
+  const target = degrees[slot.part - 1]
+  const cadence = slot.part <= 2 ? 'imperfect' : degrees[3] === 4 ? 'plagal' : 'perfect'
+  const ending = slot.part <= 2 ? [degrees[0], degrees[1]] : [degrees[3], degrees[4]]
+  const rationale = `${label} 小节的旋律用到了 ${notes.join('、')}。四个候选和弦中，只有 ${roman[target]} 含有这三个音。该乐句以 ${roman[ending[0]]} 到 ${roman[ending[1]]} 形成 ${cadence} cadence。`
+  return choose(random, {
+    objectiveId: 'HAR-5-CHOICE', variant: 'match-cadence-melody',
+    stem: `Choose a suitable chord for bar ${label} in this melody in ${key} major.`,
+    terms: ['cadence', 'suitable chord', `${cadence} cadence`],
+    stimulus: { kind: 'excerpt', role: 'cadence-matching', excerpt },
+  }, roman[target], choices.filter(degree => degree !== target).map(degree => {
+    const members = chords.get(degree)!.map(formatPitchName)
+    const absent = notes.filter(note => !members.includes(note))
+    return [roman[degree], `${roman[degree]} 的和弦音是 ${members.join('、')}。它缺少本小节中的 ${absent.join('、')}。`]
+  }), rationale, 'dropdown')
+}
 
 function chordQuestion(slot: ExamSlot, random: Random, paperRandom: Random): Draft {
   const { group, part } = slot
-  if (group === 1) {
-    const key = random.pick(['C', 'G', 'D', 'F'])
-    const tonic = parsePitch(`${key}4`)
-    const [cadence, targetIndex] = paperRandom.shuffle([
-      [cadenceOptions[0], 0], [cadenceOptions[0], 1], [cadenceOptions[1], 0], [cadenceOptions[1], 1], [cadenceOptions[2], 1],
-    ] as const)[part - 1]
-    const [firstDegree, secondDegree] = cadence.degrees
-    const target = cadence.degrees[targetIndex]
-    const accompanimentNotes = cadence.degrees.map(degree => buildScaleTriad(tonic, 'major', degree))
-    const melody = accompanimentNotes.map(chord => random.pick(chord))
-    const clef: Clef = 'treble'
-    const last = targetIndex === 1
-    const other = last ? firstDegree : secondDegree
-    const direction = last ? 'follows' : 'precedes'
-    const ordinal = last ? 'second' : 'first'
-    return choose(random, { objectiveId: 'HAR-5-CHOICE', variant: 'choose-cadential-chord',
-      stem: `These are the final two melody notes in ${key} major. For a ${cadence.name} cadence, which chord takes the ${ordinal} note and ${direction} chord ${roman[other]}?`,
-      terms: ['cadence', 'suitable chord', `${cadence.name} cadence`], notation: { clef, pitches: melody } },
-    roman[target], Object.values(roman).filter(label => label !== roman[target]).map(label => [label,
-      `选 ${label} 会把第 ${targetIndex + 1} 个和弦改变。题目指定的 ${cadence.name} cadence 要求 ${cadence.route}。`]),
-    `这个终止要求 ${cadence.route}。第 ${targetIndex + 1} 个旋律音是 ${formatPitchName(melody[targetIndex])}，属于和弦 ${roman[target]} 的三音组合 ${pitchNames(accompanimentNotes[targetIndex])}。`, 'dropdown')
-  }
+  if (group === 1) return cadenceMatching(slot, random, paperRandom)
   if (group === 2) {
     const cadence = paperRandom.shuffle(cadenceOptions)[part - 1]
     const [first, second] = cadence.degrees
-    const key = random.pick(['C', 'G', 'D', 'F'])
+    const keySignature = random.pick([-1, 0, 1, 2])
+    const key = getKeySignature(keySignature).major
     const tonic = parsePitch(`${key}4`)
-    const [firstRoot, secondRoot] = cadence.degrees.map(degree => buildScaleTriad(tonic, 'major', degree)[0])
+    const progression = [1, random.pick([2, 4] as const), first, second]
+    const chords = progression.map(degree => grandStaffChord(buildScaleTriad(tonic, 'major', degree)))
     return choose(random, { objectiveId: cadence.objectiveId, variant: 'recognise-cadence',
-      stem: `A phrase in ${key} major ends on ${formatPitchName(firstRoot)} ${first === 2 ? 'minor' : 'major'} followed by ${formatPitchName(secondRoot)} major. Identify the cadence.`,
-      terms: ['cadence', 'tonic', 'dominant', 'subdominant'] }, `${identifyCadence(first, second)} cadence`,
+      stem: `Identify the cadence formed by the last two chords in this ${key} major phrase.`,
+      terms: ['cadence', 'tonic', 'dominant', 'subdominant'],
+      stimulus: { kind: 'harmony', keySignature, chords } }, `${identifyCadence(first, second)} cadence`,
     cadenceOptions.filter(item => item !== cadence).map(item => [`${item.name} cadence`, `${item.name} cadence 的典型进行是 ${item.route}。题中和弦的功能不同。`]),
     `在 ${key} 大调中，这两个和弦依次是 ${roman[first]} 与 ${roman[second]}，形成 ${cadence.name} cadence。`)
   }
-  const signature = getKeySignature(random.integer(-6, 6))
-  const form = random.pick(['major', 'harmonic minor'] as const)
+  const signature = getKeySignature(paperRandom.integer(-6, 6))
+  const form = paperRandom.pick(['major', 'harmonic minor'] as const)
   const key = form === 'major' ? signature.major : signature.minor
-  const clef = random.pick(['treble', 'alto'] as const)
-  const degree = random.pick([1, 2, 4, 5] as const)
-  const inversion = paperRandom.shuffle([0, 1, 2] as const)[part - 1]
-  const chord = buildScaleTriad(parsePitch(`${key}4`), form, degree)
-  const pitches = invertTriad(chord, inversion)
+  const degrees = paperRandom.shuffle([1, 2, 4, 5] as const).slice(0, 3)
+  const inversions = paperRandom.shuffle([0, 1, 2] as const)
+  const rootPositions = degrees.map(degree => buildScaleTriad(parsePitch(`${key}4`), form, degree))
+  const chords = rootPositions.map((rootPosition, index) => grandStaffChord(invertTriad(rootPosition, inversions[index]), String.fromCharCode(65 + index)))
+  const { bass, label } = chords[part - 1]
+  const degree = degrees[part - 1]
+  const inversion = inversions[part - 1]
+  const chord = rootPositions[part - 1]
   const answer = `${roman[degree]} ${positions[inversion]}`
   return choose(random, { objectiveId: 'HAR-5-INVERSION', variant: 'identify-chord-inversion',
-    stem: `The notes of a chord in ${key} ${form === 'major' ? 'major' : 'minor'} are shown from lowest to highest. Identify the chord and its position.`,
-    terms: ['root position', 'first inversion', 'second inversion'], notation: { clef, pitches, keySignature: signature.count } },
+    stem: `Identify chord ${label} and its inversion. The key is ${key} ${form === 'major' ? 'major' : 'minor'}.`,
+    terms: ['root position', 'first inversion', 'second inversion'], stimulus: { kind: 'harmony', keySignature: signature.count, chords } },
   answer, [
     ...positions.flatMap((label, index) => index === inversion ? [] : [[`${roman[degree]} ${label}`,
-      `这种转位应以 ${formatPitchName(chord[index])} 为最低音。谱上的最低音是 ${formatPitchName(pitches[0])}。`] satisfies Distractor]),
+      `这种转位应以 ${formatPitchName(chord[index])} 为最低音。谱上的最低音是 ${formatPitchName(bass)}。`] satisfies Distractor]),
     [`${roman[degree === 1 ? 5 : 1]} ${positions[inversion]}`, `最低音决定转位，和弦音组合决定和弦功能。把三个音重新叠成三度可得 ${roman[degree]} 的和弦。`],
   ],
-  `把和弦音按三度排列可得 ${pitchNames(chord)}，根音是 ${formatPitchName(chord[0])}，对应 ${roman[degree]}。谱上最低音 ${formatPitchName(pitches[0])} 是${['根音', '三音', '五音'][inversion]}，所以是 ${positions[inversion]}。`)
+  `把和弦音按三度排列可得 ${pitchNames(chord)}，根音是 ${formatPitchName(chord[0])}，对应 ${roman[degree]}。谱上最低音 ${formatPitchName(bass)} 是${['根音', '三音', '五音'][inversion]}，所以是 ${positions[inversion]}。`)
 }
 
 const instrumentFacts = [
@@ -530,15 +659,17 @@ export function generateExamQuestion(slot: ExamSlot, paperSeed: number): Grade5Q
   if (sectionId === 'intervals') {
     const objective = part % 2 === group % 2 ? 'INT-5-COMPOUND' : 'INT-5-SIMPLE'
     const variant = group === 1 ? 'identify' : group === 2 ? 'quality' : 'construct'
-    return generateIntervalQuestion(objective, seed, variant)
+    const question = generateIntervalQuestion(objective, seed, variant)
+    return variant === 'construct' ? { ...question, stem: question.stem.replace(/^Choose/, 'Place') } : question
   }
   const generators = {
     rhythm: rhythmQuestion, pitch: pitchQuestion, 'keys-scales': keyQuestion,
     chords: chordQuestion, terms: termsQuestion, context: contextQuestion,
   }
   const item = generators[sectionId](slot, random, paperRandom)
+  const diagrams = item.options.flatMap(option => option.stimulus ? [JSON.stringify(option.stimulus)] : []).sort()
   return {
-    ...item, id: `grade5-original-v1:${sectionId}:${group}:${part}:${seed}`, seed, difficulty: 5,
-    contentKey: JSON.stringify([item.objectiveId, item.stem, item.notation, item.stimulus]),
+    ...item, id: `grade5-original-v2:${sectionId}:${group}:${part}:${seed}`, seed, difficulty: 5,
+    contentKey: JSON.stringify([item.objectiveId, item.stem, item.notation, item.stimulus, diagrams]),
   }
 }

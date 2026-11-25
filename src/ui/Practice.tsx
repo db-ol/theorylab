@@ -3,11 +3,11 @@ import { glossary } from '../curriculum/glossary'
 import { generateStudyQuestion } from '../curriculum/learningContent'
 import { validateAnswer, type Question, type QuestionAnswer } from '../questions'
 import { buildLessonCheck, lessonCheckSize } from '../questions/lessonCheck'
-import { formatPitch, pitchAtStaffPosition, staffPosition } from '../theory'
+import { formatPitch } from '../theory'
 import type { Attempt, AttemptMode } from '../learning/progress'
 import { Staff } from './Notation'
 import { ExamStimulus } from './ExamStimulus'
-import type { Grade5Question } from '../exam/grade5'
+import { PitchAnswer } from './PitchAnswer'
 import { Icon } from './Icon'
 import type { Progress } from './useProgress'
 
@@ -32,30 +32,11 @@ export function makeAttempt(question: Question, answer: Answer, correct: boolean
   }
 }
 
-function PitchAnswer({ question, answer, onAnswer, disabled }: {
-  question: Question; answer: Answer | undefined; onAnswer: (answer: Answer) => void; disabled?: boolean
-}) {
-  const clef = question.notation?.clef ?? 'treble'
-  const first = question.notation?.pitches[0]
-  const initial = first ? staffPosition(first, clef) : 4
-  const pitch = typeof answer === 'object' ? answer : undefined
-  const [position, setPosition] = useState(pitch ? staffPosition(pitch, clef) : initial)
-  const accidental = pitch?.accidental ?? 0
-  const update = (newPosition: number, newAccidental: number) => {
-    setPosition(newPosition)
-    onAnswer(pitchAtStaffPosition(newPosition, clef, newAccidental))
-  }
-  return <fieldset className="pitch-answer" disabled={disabled}>
-    <legend>Place the second note</legend>
-    <Staff clef={clef} keySignature={question.notation?.keySignature} pitches={first ? pitch ? [first, pitch] : [first] : pitch ? [pitch] : []} showClefName={false} />
-    <div className="pitch-inputs">
-      <label>Staff position<input type="range" min={Math.min(-12, initial - 14)} max={Math.max(18, initial + 14)} value={position} aria-valuetext={position < 0 ? `${-position} steps below the stave` : position > 8 ? `${position - 8} steps above the stave` : position % 2 ? `Space ${(position + 1) / 2}` : `Line ${position / 2 + 1}`} onChange={(e) => update(Number(e.target.value), accidental)} /></label>
-      <label>Accidental<select value={accidental} onChange={(e) => update(position, Number(e.target.value))}>
-        {['Double flat', 'Flat', 'Natural', 'Sharp', 'Double sharp'].map((label, i) => <option key={label} value={i - 2}>{label}</option>)}
-      </select></label>
-      {answer === undefined && <button className="button secondary" type="button" onClick={() => update(position, accidental)}>Place note</button>}
-    </div>
-  </fieldset>
+function QuestionFigure({ question }: { question: Question }) {
+  return <>
+    <ExamStimulus stimulus={question.stimulus} />
+    {question.notation && <Staff {...question.notation} showClefName={false} />}
+  </>
 }
 
 export function QuestionInput({ question, answer, onAnswer, disabled }: {
@@ -63,31 +44,33 @@ export function QuestionInput({ question, answer, onAnswer, disabled }: {
 }) {
   if (question.answerKind === 'pitch') return <PitchAnswer key={question.id} question={question} answer={answer} onAnswer={onAnswer} disabled={disabled} />
   return <>
-    <ExamStimulus stimulus={(question as Grade5Question).stimulus} />
-    {question.notation && <Staff {...question.notation} showClefName={false} />}
+    <QuestionFigure question={question} />
     {question.answerKind === 'numeric' ? <label className="numeric-answer">Your answer
       <input type="number" step="any" inputMode="decimal" disabled={disabled} value={typeof answer === 'number' ? answer : ''} onChange={(e) => onAnswer(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
     </label> : question.answerKind === 'dropdown' ? <label className="numeric-answer">Your answer
       <select disabled={disabled} value={typeof answer === 'string' ? answer : ''} onChange={(e) => onAnswer(e.target.value || undefined)}>
         <option value="">Select an answer</option>{question.options.map((option) => <option key={option.id} value={option.id}>{option.text}</option>)}
       </select>
-    </label> : <fieldset className="option-list" disabled={disabled}>
+    </label> : <fieldset className={question.options.some(option => option.stimulus) ? 'option-list score-options' : 'option-list'} disabled={disabled}>
       <legend className="sr-only">Answer options</legend>
       {question.options.map((option, i) => <label key={option.id} className={answer === option.id ? 'selected' : ''}>
         <input type="radio" name={question.id} value={option.id} checked={answer === option.id} onChange={() => onAnswer(option.id)}/>
-        <span className="option-letter">{String.fromCharCode(65 + i)}</span><span>{option.text}</span>
+        <span aria-hidden="true" className="option-letter">{String.fromCharCode(65 + i)}</span>
+        {option.stimulus ? <><span className="sr-only">{option.text}</span><ExamStimulus stimulus={option.stimulus}/></> : <span>{option.text}</span>}
       </label>)}
     </fieldset>}
   </>
 }
 
-export function QuestionFeedback({ question, correct }: { question: Question; correct: boolean }) {
+export function QuestionFeedback({ question, correct, showPrompt = false }: { question: Question; correct: boolean; showPrompt?: boolean }) {
   return <section className={`feedback ${correct ? 'correct' : 'incorrect'}`} aria-live="polite">
     <h3>{correct ? 'Correct' : 'Review this answer'}</h3>
+    {showPrompt && <QuestionFigure question={question} />}
     <p lang="zh-Hans">{question.explanationZh}</p>
     {question.options.length > 0 && <ul>
       {question.options.map((option) => <li key={option.id}>
-        <strong>{option.text}{option.id === question.correctAnswer.optionId ? ' ✓' : ''}</strong><span lang="zh-Hans">{option.explanationZh}</span>
+        <strong>{option.text}{option.id === question.correctAnswer.optionId ? ' ✓' : ''}</strong>
+        {showPrompt && <ExamStimulus stimulus={option.stimulus}/>}<span lang="zh-Hans">{option.explanationZh}</span>
       </li>)}
     </ul>}
     <a href={`#/lesson/${question.objectiveId}`}>Open the lesson</a>

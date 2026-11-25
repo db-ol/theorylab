@@ -1214,7 +1214,7 @@ export const objectives: Objective[] = [
     prerequisites: ["RHY-4-DUPLET", "RHY-3-TRIPLET"],
     terms: ["quintuplet", "sextuplet", "irregular division", "tuplet"],
     questionTypes: ["Numeric input", "notation selection"],
-    strategy: "Choose explicit base units and calculate ratios, treating implied ratios as valid only with unambiguous notation.",
+    strategy: "Draw five or six members against four ordinary notes. Read a bracketed ratio, select notation of equal duration, or enter a count. Verify using exact fractions.",
     source: { url: syllabusUrl, pages: [13, 16] },
     status: "implemented",
     validation: "automated",

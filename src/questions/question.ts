@@ -1,10 +1,12 @@
 import { sameSpelling, type Clef, type Pitch } from '../theory'
 import type { QuestionSeed, Random } from './random'
+import type { ExamStimulus } from './stimulus'
 
 export interface QuestionOption {
   id: string
   text: string
   explanationZh: string
+  stimulus?: ExamStimulus
 }
 
 export interface Question {
@@ -21,6 +23,7 @@ export interface Question {
   explanationZh: string
   terms: string[]
   notation?: { clef: Clef; pitches: Pitch[]; keySignature?: number }
+  stimulus?: ExamStimulus
 }
 
 export function makeOptions(

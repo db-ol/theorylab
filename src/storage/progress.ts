@@ -203,16 +203,49 @@ function validPulses(value: unknown): boolean {
     && (pulse.pitch === undefined || isPitch(pulse.pitch)))
 }
 
+function validRhythm(value: Record<string, unknown>): boolean {
+  const { pulses, beamGroups, tuplets, groupStarts } = value
+  if (!Array.isArray(pulses) || !validPulses(pulses)) return false
+  if (beamGroups !== undefined && (!Array.isArray(beamGroups) || beamGroups.length > pulses.length
+    || !beamGroups.every(size => isInteger(size) && size > 0 && size <= pulses.length)
+    || beamGroups.reduce((sum, size) => sum + size, 0) !== pulses.length)) return false
+  if (groupStarts !== undefined && (!Array.isArray(groupStarts) || groupStarts.length > pulses.length
+    || !groupStarts.every(index => isInteger(index) && index >= 0 && index < pulses.length)
+    || new Set(groupStarts).size !== groupStarts.length)) return false
+  if (tuplets === undefined) return true
+  if (!Array.isArray(tuplets) || tuplets.length > pulses.length) return false
+  const occupied = new Set<number>()
+  return tuplets.every(mark => {
+    if (!isRecord(mark) || !isInteger(mark.start) || mark.start < 0 || !isInteger(mark.count) || mark.count < 2
+      || mark.start + mark.count > pulses.length || !isInteger(mark.inTimeOf) || mark.inTimeOf < 1 || mark.inTimeOf > 256) return false
+    for (let index = mark.start; index < mark.start + mark.count; index++) {
+      if (occupied.has(index)) return false
+      occupied.add(index)
+    }
+    return true
+  })
+}
+
 function validStimulus(value: unknown): boolean {
   if (!isRecord(value)) return false
   if (value.kind === 'rhythm') {
-    return validPulses(value.pulses) && (value.timeSignature === undefined || isText(value.timeSignature))
+    return validRhythm(value) && (value.timeSignature === undefined || isText(value.timeSignature))
+      && (value.keySignature === undefined || isKeySignature(value.keySignature))
+      && (value.clef === undefined || CLEFS.some(clef => value.clef === clef))
+  }
+  if (value.kind === 'harmony') {
+    return isKeySignature(value.keySignature) && Array.isArray(value.chords) && value.chords.length > 0
+      && value.chords.length <= 256 && value.chords.every(chord => isRecord(chord)
+        && isPitch(chord.bass) && Array.isArray(chord.treble) && chord.treble.length > 0
+        && chord.treble.length <= 16 && chord.treble.every(isPitch)
+        && (chord.label === undefined || isText(chord.label)))
   }
   const excerpt = value.excerpt
-  return value.kind === 'excerpt' && isRecord(excerpt)
+  return value.kind === 'excerpt' && (value.role === undefined || value.role === 'cadence-matching') && isRecord(excerpt)
     && CLEFS.some((clef) => excerpt.clef === clef) && isKeySignature(excerpt.keySignature) && isText(excerpt.timeSignature)
     && Array.isArray(excerpt.bars) && excerpt.bars.length <= 256 && excerpt.bars.every((bar) => isRecord(bar)
-      && validPulses(bar.pulses)
+      && validRhythm(bar) && (bar.keySignature === undefined || isKeySignature(bar.keySignature))
+      && (bar.clef === undefined || CLEFS.some(clef => bar.clef === clef)) && (bar.label === undefined || isText(bar.label))
       && (bar.dynamic === undefined || isText(bar.dynamic))
       && (bar.direction === undefined || isText(bar.direction)))
 }
@@ -230,7 +263,7 @@ function isQuestionSnapshot(value: unknown): value is Grade5Question {
   const optionIds = new Set<string>()
   for (const option of value.options) {
     if (!isRecord(option) || !isId(option.id) || !isText(option.text) || !isText(option.explanationZh)
-      || optionIds.has(option.id)) return false
+      || (option.stimulus !== undefined && !validStimulus(option.stimulus)) || optionIds.has(option.id)) return false
     optionIds.add(option.id)
   }
   const answer = value.correctAnswer

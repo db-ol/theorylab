@@ -8,6 +8,8 @@ import {
 import { generateIntervalQuestion, validateAnswer, type Question } from '../questions'
 import { generateExamQuestion } from '../exam/grade5'
 import { isExamSession } from '../storage/progress'
+import { getKeySignature } from '../theory'
+import { ExamStimulus } from './ExamStimulus'
 import { Icon } from './Icon'
 import { describeAnswer, makeAttempt, newSeed, QuestionFeedback, QuestionInput, type Answer } from './Practice'
 import type { Progress } from './useProgress'
@@ -16,6 +18,8 @@ function clock(ms: number) {
   const seconds = Math.ceil(ms / 1_000)
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 }
+
+const chordChoiceOrder = ['I', 'II', 'IV', 'V']
 
 export function Exam({ progress }: { progress: Progress }) {
   const exams = progress.data.exams.map((row) => row.value).filter(isExamSession).sort((a, b) => b.startedAtMs - a.startedAtMs)
@@ -95,13 +99,19 @@ export function Exam({ progress }: { progress: Progress }) {
       <h2>Answer explanations</h2>
       {session.paper.items.map((item, i) => <details key={item.id} className="exam-explanation"><summary>{i + 1}. {item.question.stem} <strong>{session.result.outcomes[i].marks}/1</strong></summary>
         <p>Your answer · {describeAnswer(item.question, session.answers[item.id])}</p>
-        <QuestionFeedback question={item.question} correct={Boolean(session.result.outcomes[i].marks)} />
+        <QuestionFeedback question={item.question} correct={Boolean(session.result.outcomes[i].marks)} showPrompt />
       </details>)}
     </section>
   </>
 
   const index = Math.max(0, session.paper.items.findIndex((item) => item.id === session.navigation?.itemId))
   const current = session.paper.items[index]
+  const stimulus = current.question.stimulus
+  const cadenceItems = stimulus?.kind === 'excerpt' && stimulus.role === 'cadence-matching'
+    ? session.paper.items.filter(item => item.sectionId === current.sectionId && item.group === current.group)
+    : []
+  const first = cadenceItems.length ? index - current.part + 1 : index
+  const last = cadenceItems.length ? first + cadenceItems.length - 1 : index
   const select = (itemIndex: number) => {
     const item = session.paper.items[itemIndex]
     if (item) persist(focusExamItem(session, item.id, Date.now()))
@@ -113,11 +123,31 @@ export function Exam({ progress }: { progress: Progress }) {
     </div>
     <div className="exam-layout">
       <section className="panel quiz">
-        <div className="between"><p className="eyebrow">Question {index + 1} · 1 mark</p><button className="button secondary" aria-pressed={session.flags.includes(current.id)} onClick={() => persist(toggleExamFlag(session, current.id, Date.now()))}><Icon name="flag" size={16} /> Flag</button></div>
-        <h2>{current.question.stem}</h2>
-        <QuestionInput question={current.question} answer={session.answers[current.id]} onAnswer={(value) => persist(saveExamAnswer(session, current.id, value, Date.now()))}/>
-        <div className="button-row"><button className="button secondary" disabled={index === 0} onClick={() => select(index - 1)}>Previous</button>
-          <button className="button primary" disabled={index >= session.paper.items.length - 1} onClick={() => select(index + 1)}>Next question</button></div>
+        <div className="between"><p className="eyebrow">{first === last
+          ? `Question ${index + 1} · 1 mark`
+          : `Questions ${first + 1} to ${last + 1} · ${cadenceItems.length} marks`}</p>
+          <button className="button secondary" aria-pressed={session.flags.includes(current.id)} onClick={() => persist(toggleExamFlag(session, current.id, Date.now()))}><Icon name="flag" size={16} /> Flag{cadenceItems.length > 0 && stimulus?.kind === 'excerpt' ? ` ${stimulus.excerpt.bars[current.part - 1]?.label}` : ''}</button></div>
+        <h2>{cadenceItems.length > 0 && stimulus?.kind === 'excerpt'
+          ? `Choose chords for the marked bars in this melody in ${getKeySignature(stimulus.excerpt.keySignature).major} major.`
+          : current.question.stem}</h2>
+        {cadenceItems.length > 0 && stimulus?.kind === 'excerpt' ? <ExamStimulus stimulus={stimulus} renderBarAnswer={(barIndex) => {
+          const item = cadenceItems[barIndex]
+          if (!item) return null
+          const answer = session.answers[item.id]
+          return <label className="numeric-answer">Chord {stimulus.excerpt.bars[barIndex].label}
+            <select value={typeof answer === 'string' ? answer : ''} onFocus={() => select(first + barIndex)} onChange={(event) => {
+              const now = Date.now()
+              const focused = focusExamItem(session, item.id, now)
+              persist(saveExamAnswer(focused, item.id, event.currentTarget.value || undefined, now))
+            }}>
+              <option value="">Select an answer</option>
+              {[...item.question.options].sort((a, b) => chordChoiceOrder.indexOf(a.text) - chordChoiceOrder.indexOf(b.text))
+                .map(option => <option key={option.id} value={option.id}>{option.text}</option>)}
+            </select>
+          </label>
+        }} /> : <QuestionInput question={current.question} answer={session.answers[current.id]} onAnswer={(value) => persist(saveExamAnswer(session, current.id, value, Date.now()))}/>}
+        <div className="button-row"><button className="button secondary" disabled={first === 0} onClick={() => select(first - 1)}>Previous</button>
+          <button className="button primary" disabled={last >= session.paper.items.length - 1} onClick={() => select(last + 1)}>Next question</button></div>
       </section>
       <section className="panel exam-navigation"><h2>Questions</h2><div className="number-grid">
         {session.paper.items.map((item, i) => <button key={item.id} className={`${session.answers[item.id] !== undefined ? 'answered' : ''} ${session.flags.includes(item.id) ? 'flagged' : ''}`} aria-current={i === index ? 'step' : undefined} aria-label={`Question ${i + 1}${session.flags.includes(item.id) ? ', flagged' : ''}`} onClick={() => select(i)}>{i + 1}</button>)}

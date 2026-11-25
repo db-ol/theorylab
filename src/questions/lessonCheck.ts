@@ -5,6 +5,11 @@ import { createRandom, type QuestionSeed } from './random'
 
 export const lessonCheckSize = 3
 
+function checkFormat(question: Question) {
+  if (question.options.some((option) => option.stimulus)) return 'score-choice'
+  return question.answerKind ?? 'choice'
+}
+
 export function buildLessonCheck(objectiveId: string, seed: QuestionSeed, previousKeys: Iterable<string> = []): Question[] {
   const random = createRandom(`lesson-check-v1:${objectiveId}:${typeof seed}:${seed}`)
   const seen = new Set(previousKeys)
@@ -21,18 +26,19 @@ export function buildLessonCheck(objectiveId: string, seed: QuestionSeed, previo
 
   const selected: Question[] = []
   const variants = new Set<string>()
-  const kinds = new Set<NonNullable<Question['answerKind']>>()
+  const kinds = new Set<ReturnType<typeof checkFormat>>()
   const priority = (key: string, question: Question) => {
-    const kind = question.answerKind ?? 'choice'
-    const newFormat = selected.length === 0 ? kind === 'choice' : !kinds.has(kind)
-    return (seen.has(key) ? 0 : 8) + (newFormat ? 2 : 0) + (variants.has(question.variant) ? 0 : 1)
+    const kind = checkFormat(question)
+    let formatBonus = kinds.has(kind) ? 0 : 2
+    if (selected.length === 0) formatBonus = kind === 'score-choice' ? 3 : kind === 'choice' ? 2 : 0
+    return (seen.has(key) ? 0 : 8) + formatBonus + (variants.has(question.variant) ? 0 : 1)
   }
 
   while (selected.length < lessonCheckSize && candidates.size > 0) {
     const [key, question] = [...candidates.entries()].sort(([keyA, a], [keyB, b]) => priority(keyB, b) - priority(keyA, a))[0]
     selected.push(question)
     variants.add(question.variant)
-    kinds.add(question.answerKind ?? 'choice')
+    kinds.add(checkFormat(question))
     candidates.delete(key)
   }
   return selected

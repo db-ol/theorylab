@@ -7,6 +7,7 @@ import {
 } from '../theory'
 import { Icon } from './Icon'
 import { MetreExplorer, type InitialMetre } from './MetreExplorer'
+import { TupletExplorer, type TupletLesson } from './TupletExplorer'
 import { Keyboard, Staff, playPitches, type StaffPulse } from './Notation'
 
 const signatures = [0, 1, 2, 3, 4, 5, 6, -6, -5, -4, -3, -2, -1].map(getKeySignature)
@@ -108,7 +109,7 @@ export function PitchExplorer({ demo, instrumentMode, transposeMode }: {
 
 const baseValues = Object.keys(NOTE_VALUES) as StaffPulse['value'][]
 
-export function RhythmExplorer({ metre = false, ...initialMetre }: { metre?: boolean } & InitialMetre) {
+export function RhythmExplorer({ metre = false, tuplet, chinese, ...initialMetre }: { metre?: boolean; tuplet?: TupletLesson; chinese?: boolean } & InitialMetre) {
   const [value, setValue] = useState<StaffPulse['value']>('crotchet')
   const [dots, setDots] = useState<0 | 1 | 2>(0)
   const [rest, setRest] = useState(false)
@@ -116,8 +117,8 @@ export function RhythmExplorer({ metre = false, ...initialMetre }: { metre?: boo
   const semibreves = duration.numerator / duration.denominator
   const blocks = Math.max(1, Math.ceil(semibreves))
   return <section className="panel explorer">
-    <p className="eyebrow">Interactive example</p><h2>{metre ? 'Metre and grouping explorer' : 'Rhythmic duration explorer'}</h2>
-    {metre ? <MetreExplorer {...initialMetre} /> : <>
+    <p className="eyebrow">Interactive example</p><h2>{tuplet ? 'Tuplet explorer' : metre ? 'Metre and grouping explorer' : 'Rhythmic duration explorer'}</h2>
+    {tuplet ? <TupletExplorer lesson={tuplet} chinese={chinese} /> : metre ? <MetreExplorer {...initialMetre} /> : <>
       <div className="explorer-fields">
         <label>Note value<select value={value} onChange={(e) => setValue(e.target.value as StaffPulse['value'])}>{baseValues.map((name) => <option key={name} value={name}>{clefLabel(name)}</option>)}</select></label>
         <label>Dots<select value={dots} onChange={(e) => setDots(Number(e.target.value) as typeof dots)}>{[0, 1, 2].map((count) => <option key={count}>{count}</option>)}</select></label>

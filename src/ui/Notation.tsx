@@ -1,13 +1,8 @@
 import { useState } from 'react'
 import { formatAccidental, formatPitch, getKeySignature, midiNumber, parsePitch, staffPosition, type Clef, type Pitch } from '../theory'
+import type { RhythmPulse, RhythmTuplet } from '../questions/stimulus'
 
-export interface StaffPulse {
-  value: 'breve' | 'semibreve' | 'minim' | 'crotchet' | 'quaver' | 'semiquaver' | 'demisemiquaver'
-  dots?: 1 | 2
-  rest?: boolean
-  tieAfter?: boolean
-  pitch?: Pitch
-}
+export type StaffPulse = RhythmPulse
 
 const clefNames: Record<Clef, string> = { treble: 'Treble', bass: 'Bass', alto: 'Alto', tenor: 'Tenor' }
 
@@ -43,18 +38,30 @@ function RestMark({ value, x, y }: { value: StaffPulse['value']; x: number; y: n
   </g>
 }
 
-export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = false, showClefName = true, hideClef = false, showKeySignature = true, rhythm, timeSignature, annotation, simultaneous = false, beamGroups }: {
+export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = false, showClefName = true, hideClef = false, showKeySignature = true, rhythm, timeSignature, annotation, simultaneous = false, beamGroups, tuplets = [], groupStarts = [], answerRange, chordColumns, columnLabels }: {
   clef?: Clef; pitches?: readonly Pitch[]; keySignature?: number; showNames?: boolean; showClefName?: boolean;
   hideClef?: boolean; showKeySignature?: boolean; rhythm?: readonly StaffPulse[]; timeSignature?: string; annotation?: string; simultaneous?: boolean; beamGroups?: readonly number[]
+  tuplets?: readonly RhythmTuplet[]; groupStarts?: readonly number[]; answerRange?: { min: number; max: number }; chordColumns?: readonly (readonly Pitch[])[]; columnLabels?: readonly (string | undefined)[]
 }) {
-  const notes = rhythm?.map((pulse) => pulse.pitch ?? middle) ?? pitches ?? []
+  const columns = chordColumns?.flatMap((pitches, column) => {
+    let displaced = false
+    return pitches.map((pitch, index) => {
+      displaced = index > 0 && !displaced && Math.abs(staffPosition(pitch, clef) - staffPosition(pitches[index - 1], clef)) <= 1
+      return { column, displaced, pitch, accidentalColumn: index }
+    })
+  })
+  const notes = columns?.map(note => note.pitch) ?? rhythm?.map((pulse) => pulse.pitch ?? middle) ?? pitches ?? []
   const startX = (hideClef ? 30 : 83) + Math.abs(keySignature) * 16 + (timeSignature ? 29 : 0)
-  const width = Math.max(304, startX + notes.length * 43 + 24)
-  const span = width - startX
+  const slots = chordColumns?.length ?? notes.length
+  const width = Math.max(304, startX + slots * (chordColumns ? 65 : 43) + 24)
+  const span = width - startX - 18
   const positions = notes.map((pitch) => staffPosition(pitch, clef))
-  const xAt = (i: number) => startX + (simultaneous
-    ? 0.57 + (i && positions[i] - positions[i - 1] === 1 ? 10 / span : 0)
-    : (i + 0.58) / Math.max(1, notes.length)) * span
+  const columnX = (index: number) => startX + (index + 0.57) * span / slots
+  const xAt = (i: number) => {
+    if (columns) return columnX(columns[i].column) + (columns[i].displaced ? 12 : 0)
+    if (simultaneous) return startX + 0.57 * span + (i && positions[i] - positions[i - 1] === 1 ? 10 : 0)
+    return startX + (i + 0.58) * span / Math.max(answerRange ? 2 : 1, notes.length)
+  }
   const beams: { first: number; last: number; end: number; stemUp: boolean; levels: number }[] = []
   let first = 0
   for (const size of beamGroups ?? []) {
@@ -69,16 +76,37 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
     }
     first = last + 1
   }
-  const above = Math.max(0, (Math.max(8, ...positions) - 12) * 6)
-  const below = Math.max(0, (-Math.min(0, ...positions) - 6) * 6)
+  const topMark = Math.min(22, ...positions.map((position) => 87 - position * 6 - (chordColumns ? 15 : 43)))
+  const bracketY = topMark - (groupStarts.length ? 15 : 2)
+  const above = Math.max(0, (Math.max(8, answerRange?.max ?? 8, ...positions) - 12) * 6, tuplets.length ? 13 - bracketY : groupStarts.length || columnLabels ? 12 - topMark : 0)
+  const below = Math.max(0, (-Math.min(0, answerRange?.min ?? 0, ...positions) - 6) * 6)
   const signature = getKeySignature(keySignature).accidentals
   const signPositions = signaturePitches[clef][keySignature > 0 ? 0 : 1]
   const usedAccidentals = new Map<string, number>()
-  const rhythmDescription = rhythm?.map((pulse) => `${pulse.dots === 2 ? 'double dotted ' : pulse.dots ? 'dotted ' : ''}${pulse.value}${pulse.rest ? ' rest' : pulse.tieAfter ? ' tied to the next note' : ''}`).join(', ')
+  const rhythmDescription = rhythm?.map((pulse) => `${pulse.dots === 2 ? 'double dotted ' : pulse.dots ? 'dotted ' : ''}${pulse.value}${pulse.rest ? ' rest' : pulse.pitch ? ' ' + formatPitch(pulse.pitch) : ''}${pulse.tieAfter ? ' tied to the next note' : ''}`).join(', ')
+  const signatureCount = Math.abs(keySignature)
+  const signatureDescription = signatureCount && showKeySignature
+    ? `Key signature with ${signatureCount} ${keySignature > 0 ? 'sharp' : 'flat'}${signatureCount > 1 ? 's' : ''}`
+    : ''
+  const markings = [
+    signatureDescription, annotation,
+    ...(chordColumns ? [clefNames[clef] + ' clef', ...chordColumns.map((pitches, index) =>
+      `Chord ${columnLabels?.[index] ?? index + 1}, ${pitches.map(formatPitch).join(', ')}`)] : []),
+    ...(beamGroups?.length ? ['Beam groups ' + beamGroups.join(', ')] : []),
+    ...tuplets.map(({ start, count, inTimeOf }) => `Group starting at note ${start + 1}, ${count} in the time of ${inTimeOf}`),
+    ...(groupStarts.length ? ['Accents on notes ' + groupStarts.map(index => index + 1).join(', ')] : []),
+  ]
   const label = `${hideClef ? 'Rhythm stave' : showClefName ? clefNames[clef] + ' clef staff' : 'Music notation'}${timeSignature ? ', ' + timeSignature : ''}${rhythmDescription ? ', ' + rhythmDescription : ''}${showNames ? ', ' + notes.map(formatPitch).join(', ') : ''}`
   return <div className="staff">
-    <svg viewBox={`0 ${-above} ${width} ${129 + above + below}`} role="img" aria-label={label}>
+    <svg viewBox={`0 ${-above} ${width} ${129 + above + below}`} role="img" aria-label={[label, ...markings].filter(Boolean).join('. ')}>
       {[0, 1, 2, 3, 4].map((line) => <line key={line} x1="16" x2={width - 15} y1={39 + line * 12} y2={39 + line * 12} className="staff-line" />)}
+      {answerRange && <g>
+        <rect data-pitch-target="" x={(xAt(0) + xAt(1)) / 2} y={87 - answerRange.max * 6 - 3}
+          width={width - 16 - (xAt(0) + xAt(1)) / 2} height={(answerRange.max - answerRange.min + 1) * 6}
+          fill="currentColor" opacity="0.055"/>
+        <line x1={xAt(1)} x2={xAt(1)} y1={87 - answerRange.max * 6} y2={87 - answerRange.min * 6}
+          stroke="currentColor" strokeDasharray="2 5" opacity="0.38"/>
+      </g>}
       {!hideClef && <ClefMark clef={clef} />}
       {showKeySignature && Array.from({ length: Math.abs(keySignature) }, (_, i) => <text key={i} x={79 + i * 15} y={87 - signPositions[i] * 6 + 7} className="accidental">{keySignature > 0 ? '♯' : '♭'}</text>)}
       {timeSignature?.split('/').map((number, i) => <text key={i} x={startX - 15} y={61 + i * 24} textAnchor="middle" className="time-signature">{number}</text>)}
@@ -95,8 +123,8 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
         const index = `${pitch.letter}${pitch.octave}`
         const inherited = usedAccidentals.get(index) ?? signature[pitch.letter] ?? 0
         if (!pulse?.rest) usedAccidentals.set(index, pitch.accidental)
-        const open = pulse?.value === 'minim' || pulse?.value === 'semibreve' || pulse?.value === 'breve'
-        const stem = (!simultaneous || i === notes.length - 1) && pulse?.value !== 'semibreve' && pulse?.value !== 'breve'
+        const open = Boolean(chordColumns) || pulse?.value === 'minim' || pulse?.value === 'semibreve' || pulse?.value === 'breve'
+        const stem = !chordColumns && (!simultaneous || i === notes.length - 1) && pulse?.value !== 'semibreve' && pulse?.value !== 'breve'
         const stemUp = beam?.stemUp ?? position < 4
         const stemX = x + (stemUp ? 7 : -7)
         const stemEnd = beam?.end ?? y + (stemUp ? -32 : 32) + (simultaneous && !stemUp ? (positions[i] - positions[0]) * 6 : 0)
@@ -105,8 +133,8 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
         return <g key={i}>
           {pulse?.rest ? <RestMark value={pulse.value} x={x} y={y} /> : <>
             {ledger.map((line) => <line key={line} x1={x - 12} x2={x + 12} y1={87 - line * 6} y2={87 - line * 6} className="staff-line" />)}
-            {pitch.accidental !== inherited && <text x={x - 13 - (simultaneous ? i * 12 : 0)} y={y + 7} textAnchor="end" className="accidental">{pitch.accidental === 0 ? '♮' : accidental}</text>}
-            <ellipse cx={x} cy={y} rx="7.9" ry="5.5" transform={pulse?.value === 'semibreve' ? undefined : `rotate(-17 ${x} ${y})`}
+            {pitch.accidental !== inherited && <text x={x - 13 - (columns ? columns[i].accidentalColumn * 11 : simultaneous ? i * 12 : 0)} y={y + 7} textAnchor="end" className="accidental">{pitch.accidental === 0 ? '♮' : accidental}</text>}
+            <ellipse cx={x} cy={y} rx="7.9" ry="5.5" transform={chordColumns || pulse?.value === 'semibreve' ? undefined : `rotate(-17 ${x} ${y})`}
               fill={open ? '#fdfbf2' : 'currentColor'} stroke="currentColor" strokeWidth={open ? 2.5 : 1}/>
             {stem && <line x1={stemX} x2={stemX} y1={y} y2={stemEnd} stroke="currentColor" strokeWidth="1.4"/>}
             {pulse?.value === 'breve' && <path d={`M${x - 11} ${y - 8}v16m22-16v16`} stroke="currentColor" strokeWidth="1.4"/>}
@@ -124,6 +152,18 @@ export function Staff({ clef = 'treble', pitches, keySignature = 0, showNames = 
         const offset = stemUp ? 7 : -7
         return <line key={`${first}:${level}`} x1={xAt(first) + offset} x2={xAt(last) + offset} y1={y} y2={y} stroke="currentColor" strokeWidth="4"/>
       }))}
+      {columnLabels?.map((label, index) => label && <text key={index} x={columnX(index)}
+        y={topMark} textAnchor="middle" fontSize="15" fill="currentColor">{label}</text>)}
+      {groupStarts.map(index => <path key={index} d={`M${xAt(index) - 5} ${topMark - 3}l10 3-10 3`} fill="none" stroke="currentColor" strokeWidth="1.5"/>)}
+      {tuplets.map(({ start, count, inTimeOf }) => {
+        const left = xAt(start) - 7
+        const right = xAt(start + count - 1) + 7
+        const centre = (left + right) / 2
+        return <g key={start} fill="currentColor">
+          <path d={`M${left} ${bracketY + 6}v-6H${centre - 15}M${centre + 15} ${bracketY}H${right}v6`} fill="none" stroke="currentColor" strokeWidth="1.4"/>
+          <text x={centre} y={bracketY + 5} textAnchor="middle" fontSize="15" fontStyle="italic">{count}:{inTimeOf}</text>
+        </g>
+      })}
       {rhythm && <line x1={width - 16} x2={width - 16} y1="39" y2="87" stroke="currentColor" strokeWidth="1.4"/>}
     </svg>
     {(showNames || showClefName) && <div className="staff-caption">{showClefName && <span>{clefNames[clef]} clef</span>}{showNames && <strong>{notes.map(formatPitch).join(' · ')}</strong>}</div>}

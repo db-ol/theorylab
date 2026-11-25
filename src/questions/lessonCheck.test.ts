@@ -36,9 +36,21 @@ describe('lesson knowledge checks', () => {
 
     const cadence = buildLessonCheck('HAR-5-CHOICE', 16)
     const matching = cadence.find(question => question.answerKind === 'dropdown')
-    expect(matching?.notation?.pitches).toHaveLength(2)
+    const figure = matching?.stimulus
+    expect(figure?.kind).toBe('excerpt')
+    if (figure?.kind !== 'excerpt') throw new Error('Expected an excerpt in the cadence question')
+    expect(figure.excerpt.bars).toHaveLength(5)
+    expect(figure.excerpt.bars.map(bar => bar.label).filter(label => matching?.stem.includes(`bar ${label} `))).toHaveLength(1)
     expect(new Set(matching?.options.map(option => option.text))).toEqual(new Set(['I', 'II', 'IV', 'V']))
     expect(matching?.options.filter(option => validateAnswer(matching, option.id))).toHaveLength(1)
+  })
+
+  it.each(['RHY-5-TUPLET', 'MET-5-GROUP'])('includes scoring real notation and numeric input for %s', (objective) => {
+    for (const seed of [0, 157, 'lesson']) {
+      const questions = buildLessonCheck(objective, seed)
+      expect(questions.some(question => question.options.every(option => option.stimulus?.kind === 'rhythm') && question.options.length >= 2)).toBe(true)
+      expect(questions.some(question => question.answerKind === 'numeric' && question.stimulus?.kind === 'rhythm')).toBe(true)
+    }
   })
 
   it('reproduces a seeded check and prioritises new questions on a retake', () => {

@@ -1,0 +1,139 @@
+.tuplet-explorer {
+  display: grid;
+  gap: 13px;
+  margin-top: 13px;
+}
+
+.tuplet-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tuplet-examples .button {
+  min-height: 44px;
+}
+
+.tuplet-examples .button[aria-pressed="true"] {
+  border-color: var(--green-text);
+  background: var(--accent);
+  color: var(--green-text);
+}
+
+.tuplet-score {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 7px 10px;
+  border: 1px solid #e7e2d3;
+  border-radius: 10px;
+  background: #fdfbf2;
+  color: #24352b;
+}
+
+.tuplet-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-inline: 7%;
+  color: #526453;
+  font-size: .75rem;
+}
+
+.tuplet-score p.tuplet-row-label {
+  color: #24352b;
+  margin: 5px 7% 0;
+  font-size: .83rem;
+  font-weight: 700;
+}
+
+.tuplet-score figcaption {
+  margin-inline: 7%;
+  color: #526453;
+  font-size: .81rem;
+}
+
+.tuplet-stave {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.tuplet-staff-line {
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.tuplet-guide {
+  stroke: #687467;
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.tuplet-playhead {
+  stroke: #8d542d;
+  stroke-width: 1.5;
+}
+
+.tuplet-bracket path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.tuplet-bracket text {
+  fill: currentColor;
+  font: 700 15px system-ui, sans-serif;
+}
+
+.tuplet-beam {
+  stroke: currentColor;
+  stroke-width: 3.5;
+}
+
+.tuplet-current {
+  color: #9c501d;
+}
+
+.tuplet-position,
+.tuplet-position label {
+  display: grid;
+  gap: 4px;
+  font-size: .87rem;
+}
+
+.tuplet-position span {
+  font-weight: 650;
+}
+
+.tuplet-position input {
+  min-height: 44px;
+  margin: 0;
+}
+
+.tuplet-position output {
+  color: var(--muted);
+}
+
+.tuplet-duration {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  font-size: .87rem;
+}
+
+.tuplet-duration div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tuplet-duration dd {
+  color: var(--green-text);
+  font-weight: 700;
+  text-align: end;
+}
+
+.tuplet-help {
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--accent);
+}

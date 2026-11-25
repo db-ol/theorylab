@@ -9,7 +9,7 @@ const contentTypes = new Map([
   ['.html', 'text/html'], ['.js', 'application/javascript'], ['.css', 'text/css'], ['.svg', 'image/svg+xml'],
 ])
 const browserType = process.env.THEORYLAB_BROWSER === 'webkit' ? webkit : chromium
-const browser = await browserType.launch({ headless: true })
+const browser = await browserType.launch({ headless: true, ...(process.env.THEORYLAB_BROWSER === 'chrome' ? { channel: 'chrome' } : {}) })
 const pageErrors = []
 
 async function openPage(viewport) {
@@ -131,6 +131,22 @@ async function referenceVisuals(page) {
   await page.getByText('Second pass. Skip the first ending.', { exact: true }).waitFor()
 }
 
+async function visualLesson(page) {
+  await go(page, '#/lesson/RHY-5-TUPLET')
+  await page.getByRole('img', { name: /Ratio 5 to 4/ }).waitFor()
+  await page.getByRole('slider', { name: 'Time position' }).focus()
+  await page.keyboard.press('ArrowRight')
+  await page.getByText('1/20 of a crotchet beat from the start').waitFor()
+  await page.getByRole('button', { name: 'Sextuplet semiquavers' }).click()
+  await page.getByText('1/6 of a crotchet beat', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Start knowledge check' }).click()
+  const scores = page.locator('.score-options')
+  await scores.getByRole('radio').first().check()
+  assert.ok(await scores.getByRole('img').count() >= 3)
+  await page.getByRole('button', { name: 'Check answer' }).click()
+  await page.locator('.feedback [lang="zh-Hans"]').first().waitFor()
+}
+
 async function fullMock(page) {
   await go(page, '#/exam')
   await page.getByRole('button', { name: 'Start full mock' }).click()
@@ -145,13 +161,47 @@ async function fullMock(page) {
   await page.getByRole('button', { name: 'Question 23', exact: true }).click()
   await page.getByRole('combobox', { name: 'Your answer', exact: true }).selectOption({ index: 1 })
   await page.getByRole('button', { name: 'Question 42', exact: true }).click()
-  await page.getByRole('button', { name: 'Place note', exact: true }).click()
+  const palette = page.getByRole('group', { name: 'Noteheads' })
+  await palette.getByRole('button', { name: 'Flat notehead', exact: true }).click()
+  await page.getByText('No note placed', { exact: true }).waitFor()
+  const target = page.locator('[data-pitch-target]')
+  await target.scrollIntoViewIfNeeded()
+  const location = await target.evaluate(rect => {
+    const bounds = rect.getBBox()
+    return new DOMPoint(bounds.x + bounds.width / 2, 87 - 4 * 6).matrixTransform(rect.getScreenCTM()).toJSON()
+  })
+  await page.mouse.click(location.x, location.y)
+  await page.getByText('Line 3, flat', { exact: true }).waitFor()
+  const sharp = palette.getByRole('button', { name: 'Double sharp notehead', exact: true })
+  await sharp.dragTo(target)
+  await page.getByRole('status').filter({ hasText: /double sharp/ }).waitFor()
+  await page.getByRole('button', { name: 'Question 46', exact: true }).click()
+  const matching = page.getByRole('group', { name: 'Melody for two cadences' })
+  assert.equal(await matching.getByRole('combobox').count(), 5)
+  await matching.getByRole('combobox', { name: 'Chord C', exact: true }).selectOption({ label: 'IV' })
+  await page.getByRole('button', { name: 'Flag C', exact: true }).click()
   await page.getByRole('button', { name: 'Question 66', exact: true }).click()
   await page.getByRole('heading', { level: 1, name: 'Music in Context' }).waitFor()
   await page.getByText('Bar 4', { exact: true }).waitFor()
-  await page.getByText('4 of 75 answered', { exact: true }).waitFor()
+  await page.getByText('5 of 75 answered', { exact: true }).waitFor()
+  await page.waitForFunction(() => new Promise((resolve, reject) => {
+    const open = indexedDB.open('theorylab-progress')
+    open.onerror = () => reject(open.error)
+    open.onsuccess = () => {
+      const db = open.result
+      const read = db.transaction('exams').objectStore('exams').getAll()
+      read.onerror = () => { db.close(); reject(read.error) }
+      read.onsuccess = () => {
+        db.close()
+        resolve(read.result.some(({ value }) => value.status === 'active' && value.flags.length === 2
+          && Object.keys(value.answers).length === 5))
+      }
+    }
+  }))
   await page.reload()
-  await page.getByText('4 of 75 answered', { exact: true }).waitFor()
+  await page.getByText('5 of 75 answered', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Question 48, flagged', exact: true }).click()
+  assert.equal(await page.getByRole('combobox', { name: 'Chord C', exact: true }).locator('option:checked').textContent(), 'IV')
   assert.equal(await page.getByRole('button', { name: 'Question 1, flagged', exact: true }).count(), 1)
   await page.getByRole('button', { name: 'Question 5', exact: true }).click()
   assert.equal(await page.getByRole('spinbutton', { name: 'Your answer', exact: true }).inputValue(), '2')
@@ -218,6 +268,7 @@ try {
   await grade5Entry(page)
   await intervalPractice(page)
   await referenceVisuals(page)
+  await visualLesson(page)
   await fullMock(page)
   await page.context().close()
   await mobileAndTimer()

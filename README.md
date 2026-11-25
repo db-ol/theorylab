@@ -26,7 +26,7 @@ The build goes into `dist`. For GitHub Pages, select **GitHub Actions** as the P
 
 ## Study workflow
 
-- **Learn** with written explanations and interactive notation. In metre lessons, choose a metre family, a time signature and, where applicable, a beat grouping. End each lesson with three original English questions and review the Chinese feedback.
+- **Learn** with written explanations and interactive notation. In metre lessons, choose a metre family, a time signature and, where applicable, a beat grouping. Compare tuplets with ordinary notes on two staves that share a time cursor. End each lesson with three original English questions and review the Chinese feedback.
 - **Practise** in English and review Chinese reasoning after submitting. Optional vocabulary help is recorded separately.
 - **Review** errors with fresh questions on the same objective. Mastery requires varied independent answers and a later successful review.
 - **Take a diagnostic** across all domains or sample all 105 objectives. The results link to relevant objectives and prerequisites.
@@ -43,7 +43,7 @@ The [product requirements](PRD.md), [architecture](ARCHITECTURE.md), [curriculum
 ## Validation and limitations
 
 - Every mapped objective has an implemented lesson and practice, with automated checks for question diversity and scoring. A separate music theory educator and native Chinese editorial review are still pending.
-- The mock presents each marked part as a separate interaction. It uses sliders and selectors for keyboard friendly notation entry. Some grouping and notation choices use English descriptions. Shared excerpts are generated from a limited set of score shapes. Multirow matching and broader visual notation coverage remain open.
+- The mock includes original engraved bars, visual answer choices, numeric entry and note placement by touch, drag or keyboard. Five cadence responses share a labelled melody and are scored separately. The questions use a limited set of musical patterns. The official online practice exam provides the reference for the examination interface.
 - The project uses a small SVG renderer, Web Audio, CSS, and native IndexedDB. The renderer supports the notation used by the app. Engraving details and layout still need a visual review across browsers.
 - GitHub Actions installs dependencies, runs the unit tests, builds the site and checks it in Chromium before deploying to GitHub Pages. [View deployment runs](https://github.com/db-ol/theorylab/actions/workflows/site.yml)
 - TheoryLab is an unofficial study resource. The official ABRSM practice page links to its own examination experience.

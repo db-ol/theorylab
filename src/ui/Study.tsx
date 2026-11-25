@@ -9,7 +9,6 @@ import { ExamStimulus } from './ExamStimulus'
 import { ReferenceVisual } from './ReferenceVisual'
 import { referenceIds } from '../curriculum/referenceLessons'
 import { LessonCheck, Quiz } from './Practice'
-import type { Grade5Question } from '../exam/grade5'
 import { Staff } from './Notation'
 import { parsePitch } from '../theory'
 import type { Progress } from './useProgress'
@@ -188,7 +187,10 @@ export function Lesson({ objective, progress, chinese }: { objective: Objective;
   if (lesson?.pitches) visual = <IntervalExplorer initial={lesson.pitches} />
   else if (objective.domain === 'Keys and scales') visual = <ScaleExplorer demo={lesson?.demo} />
   else if (objective.domain === 'Pitch and clefs' || objective.domain === 'Transposition') visual = <PitchExplorer demo={lesson?.demo} transposeMode={objective.domain === 'Transposition'} instrumentMode={objective.id === 'TRN-5-CONCERT'} />
-  else if (objective.domain === 'Rhythm' || objective.domain === 'Metre and grouping') visual = <RhythmExplorer metre={objective.domain === 'Metre and grouping'} {...lesson?.metreExample} />
+  else if (objective.domain === 'Rhythm' || objective.domain === 'Metre and grouping') {
+    const tuplet = objective.id === 'RHY-2-TRIPLET' ? 'triplet' : objective.id === 'RHY-5-TUPLET' ? 'irregular' : undefined
+    visual = <RhythmExplorer metre={objective.domain === 'Metre and grouping'} tuplet={tuplet} chinese={chinese} {...lesson?.metreExample} />
+  }
   else if (objective.domain === 'Triads and chords') visual = <HarmonyExplorer cadence={['HAR-5-PERFECT', 'HAR-5-PLAGAL', 'HAR-5-IMPERFECT', 'HAR-5-CHOICE'].includes(objective.id)} />
   else if (referenceIds.includes(objective.id)) visual = <ReferenceVisual objectiveId={objective.id} chinese={chinese} />
   else if (lesson?.stimulus || lesson?.demo) visual = <section className="panel"><h2>Score example</h2>{lesson.stimulus
@@ -240,7 +242,7 @@ export function Notebook({ progress }: { progress: Progress }) {
         return <details key={mistake.id} className="notebook-row">
           <summary><strong>{objective?.title ?? 'Vocabulary'}</strong><span>{new Date(mistake.at).toLocaleDateString()}</span></summary>
           <p>{mistake.stem}</p>
-          {(mistake.question as Grade5Question | undefined)?.stimulus && <ExamStimulus stimulus={(mistake.question as Grade5Question).stimulus} />}
+          <ExamStimulus stimulus={mistake.question?.stimulus} />
           {mistake.question?.notation && <Staff {...mistake.question.notation} showClefName={false} />}
           <dl className="overview-list"><div><dt>Your answer</dt><dd>{mistake.answer}</dd></div><div><dt>Correct answer</dt><dd>{mistake.correctAnswer}</dd></div>
             <div><dt>Question seed</dt><dd>{mistake.seed}</dd></div><div><dt>Time spent</dt><dd>{Math.round(mistake.durationMs / 1000)} s</dd></div>
@@ -248,7 +250,7 @@ export function Notebook({ progress }: { progress: Progress }) {
             <div><dt>Next review</dt><dd>{state.schedule.dueAt === null ? 'None' : new Date(state.schedule.dueAt).toLocaleDateString()}</dd></div>
           </dl>
           <p lang="zh-Hans">{mistake.explanationZh}</p>
-          {mistake.choices?.length ? <ul>{mistake.choices.map((choice) => <li key={choice.label}><strong>{choice.label}</strong> <span lang="zh-Hans">{choice.explanationZh}</span></li>)}</ul> : null}
+          {mistake.choices?.length ? <ul>{mistake.choices.map((choice, index) => <li key={choice.label}><strong>{choice.label}</strong><ExamStimulus stimulus={mistake.question?.options[index]?.stimulus} /> <span lang="zh-Hans">{choice.explanationZh}</span></li>)}</ul> : null}
           <label className="cause-label">Likely cause<select value={cause} onChange={(e) => void progress.save('annotations', { id: mistake.id, cause: e.target.value as typeof cause, at: Date.now() })}>
             <option value="">Unclassified</option>{mistakeCauses.map((label) => <option key={label}>{label}</option>)}</select></label>
           {state.schedule.history.length > 0 && <p>Previous reviews · {state.schedule.history.map((review) => `${new Date(review.at).toLocaleDateString()} ${review.correct ? 'correct' : 'incorrect'}`).join(' · ')}</p>}
